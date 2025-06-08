@@ -35,7 +35,6 @@ body {
     max-width: 80vmin;
     max-height: 80vmin;
     background: #fafafa;
-    border: 8px solid #333;
     border-radius: 6px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
 }
@@ -101,4 +100,22 @@ body {
 
 .mortgaged {
     filter: grayscale(100%) brightness(70%);
+}
+
+#chat {
+    margin-top: 10px;
+}
+
+#chatMessages {
+    height: 100px;
+    overflow-y: auto;
+    background: #f5f5f5;
+    border: 1px solid #ccc;
+    padding: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+#chatInput {
+    width: calc(100% - 50px);
 }

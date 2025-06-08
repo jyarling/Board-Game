@@ -25,7 +25,6 @@ const yourMoneyInput = document.getElementById('yourMoney');
 const theirMoneyInput = document.getElementById('theirMoney');
 const yourCardsInput = document.getElementById('yourCards');
 const theirCardsInput = document.getElementById('theirCards');
-const tradeUpdateBtn = document.getElementById('tradeUpdateBtn');
 const tradeAcceptBtn = document.getElementById('tradeAcceptBtn');
 const tradeCancelBtn = document.getElementById('tradeCancelBtn');
 const tradeStatusDiv = document.getElementById('tradeStatus');
@@ -36,6 +35,9 @@ const auctionBidderSpan = document.getElementById('auctionBidder');
 const auctionCountdown = document.getElementById('auctionCountdown');
 const auctionBidBtn = document.getElementById('auctionBidBtn');
 const auctionCloseBtn = document.getElementById('auctionCloseBtn');
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const chatSend = document.getElementById('chatSend');
 let boardSize = 40;
 let currentAuction = null;
 const spaces = [
@@ -147,8 +149,6 @@ function sendTradeUpdate() {
     socket.emit('updateTrade', { id: currentTrade.id, offer });
 }
 
-tradeUpdateBtn.onclick = sendTradeUpdate;
-
 // Live update trade offer when user changes inputs
 yourMoneyInput.addEventListener('input', sendTradeUpdate);
 yourCardsInput.addEventListener('input', sendTradeUpdate);
@@ -173,6 +173,18 @@ useCardBtn.onclick = () => {
     socket.emit('useJailCard');
 };
 
+chatSend.onclick = () => {
+    const txt = chatInput.value.trim();
+    if (txt) {
+        socket.emit('chat', txt);
+        chatInput.value = '';
+    }
+};
+
+chatInput.addEventListener('keyup', e => {
+    if (e.key === 'Enter') chatSend.click();
+});
+
 socket.on('joined', (id) => {
     playerId = id;
     joinDiv.style.display = 'none';
@@ -193,6 +205,13 @@ socket.on('message', msg => {
     }
     logDiv.appendChild(p);
     logDiv.scrollTop = logDiv.scrollHeight;
+});
+
+socket.on('chat', msg => {
+    const p = document.createElement('div');
+    p.textContent = msg;
+    chatMessages.appendChild(p);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
 socket.on('yourTurn', () => {
@@ -282,6 +301,7 @@ socket.on('auctionEnded', data => {
     auctionBidBtn.disabled = true;
     auctionCloseBtn.style.display = 'block';
     currentAuction = null;
+    setTimeout(() => { auctionModal.style.display = 'none'; }, 2000);
 });
 
 function buildBoard() {
@@ -321,7 +341,7 @@ function animateTokenMove(token, idx, from, to) {
         // place token instantly on first render
         token.style.transition = 'none';
         const start = spaceCenters[to];
-        token.style.transform = `translate(${start.x}px, ${start.y}px)`;
+        token.style.transform = `translate(${start.x}px, ${start.y}px) translate(-50%, -50%)`;
         requestAnimationFrame(() => { token.style.transition = ''; });
         lastPositions[idx] = to;
         return;
@@ -334,7 +354,7 @@ function animateTokenMove(token, idx, from, to) {
         current = (current + 1) % boardSize;
         const pos = spaceCenters[current];
         token.style.transitionDuration = '200ms';
-        token.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+        token.style.transform = `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%)`;
         if (current !== to) {
             token.addEventListener('transitionend', step, { once: true });
         } else {
