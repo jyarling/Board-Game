@@ -6,6 +6,8 @@ const joinBtn = document.getElementById('joinBtn');
 const rollBtn = document.getElementById('rollBtn');
 const buyBtn = document.getElementById('buyBtn');
 const endTurnBtn = document.getElementById('endTurnBtn');
+const payJailBtn = document.getElementById('payJailBtn');
+const useCardBtn = document.getElementById('useCardBtn');
 const logDiv = document.getElementById('log');
 const boardDiv = document.getElementById('board');
 const statsDiv = document.getElementById('stats');
@@ -78,6 +80,14 @@ endTurnBtn.onclick = () => {
     socket.emit('endTurn');
 };
 
+payJailBtn.onclick = () => {
+    socket.emit('payJail');
+};
+
+useCardBtn.onclick = () => {
+    socket.emit('useJailCard');
+};
+
 socket.on('joined', (id) => {
     playerId = id;
     joinDiv.style.display = 'none';
@@ -90,7 +100,12 @@ socket.on('joined', (id) => {
 
 socket.on('message', msg => {
     const p = document.createElement('p');
-    p.textContent = msg;
+    if (typeof msg === 'object') {
+        p.textContent = msg.text;
+        if (msg.color) p.style.color = msg.color;
+    } else {
+        p.textContent = msg;
+    }
     logDiv.appendChild(p);
     logDiv.scrollTop = logDiv.scrollHeight;
 });
@@ -98,12 +113,15 @@ socket.on('message', msg => {
 socket.on('yourTurn', () => {
     rollBtn.disabled = false;
     endTurnBtn.disabled = false;
+    updateJailButtons();
     updateBuyButton();
 });
 
 socket.on('notYourTurn', () => {
     rollBtn.disabled = true;
     buyBtn.disabled = true;
+    payJailBtn.disabled = true;
+    useCardBtn.disabled = true;
     endTurnBtn.disabled = true;
 });
 
@@ -117,6 +135,7 @@ socket.on('state', state => {
     renderTokens();
     renderOwnership();
     renderStats();
+    updateJailButtons();
     updateBuyButton();
 });
 
@@ -177,7 +196,8 @@ function renderStats() {
         div.style.border = '1px solid #ccc';
         div.style.padding = '4px';
         div.style.marginBottom = '4px';
-        div.innerHTML = `<strong style="color:${getTokenColor(idx)}">${p.name}</strong><br>$${p.money}<br>${p.properties.map(i => spaces[i].name).join(', ')}`;
+        const cardInfo = p.items && p.items.getOutOfJail ? `Get Out of Jail: ${p.items.getOutOfJail}` : '';
+        div.innerHTML = `<strong style="color:${getTokenColor(idx)}">${p.name}</strong><br>$${p.money}<br>${p.properties.map(i => spaces[i].name).join(', ')}<br>${cardInfo}`;
         statsDiv.appendChild(div);
     });
 }
@@ -197,4 +217,15 @@ function updateBuyButton() {
     } else {
         buyBtn.disabled = true;
     }
+}
+
+function updateJailButtons() {
+    const me = players.find(p => p.id === playerId);
+    if (!me || !me.inJail) {
+        payJailBtn.disabled = true;
+        useCardBtn.disabled = true;
+        return;
+    }
+    payJailBtn.disabled = false;
+    useCardBtn.disabled = me.items.getOutOfJail <= 0;
 }

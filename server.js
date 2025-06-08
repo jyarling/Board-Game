@@ -50,7 +50,7 @@ const PROPERTY_INFO = [
   { price: 350 },
   { price: 0 },
   { price: 400 }
-];
+].map(info => ({ ...info, rent: info.price ? Math.ceil(info.price / 10) : 0 }));
 const SPACE_NAMES = [
   'Go',
   'Mediterranean Ave',
@@ -98,6 +98,189 @@ let players = [];
 let currentTurn = 0;
 const TURN_TIMEOUT_MS = 20000;
 let turnTimer = null;
+const COLORS = ['red', 'blue', 'green', 'yellow'];
+
+function log(message, playerIdx) {
+  if (playerIdx != null) {
+    io.emit('message', { text: message, color: COLORS[playerIdx] });
+  } else {
+    io.emit('message', { text: message });
+  }
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+let chanceDeck = [];
+let chestDeck = [];
+
+function initDecks() {
+  chanceDeck = shuffle([
+    { text: 'Advance to Go (Collect $200)', action: i => movePlayer(i, 0, true) },
+    { text: 'Advance to Illinois Ave', action: i => movePlayer(i, 24) },
+    { text: 'Advance to St. Charles Place', action: i => movePlayer(i, 11) },
+    { text: 'Advance token to nearest Utility', action: i => moveToNearest(i, [12,28], false) },
+    { text: 'Advance token to nearest Railroad', action: i => moveToNearest(i, [5,15,25,35], true) },
+    { text: 'Bank pays you dividend of $50', action: i => changeMoney(i, 50) },
+    { text: 'Get Out of Jail Free', action: i => { players[i].items.getOutOfJail++; } },
+    { text: 'Go Back 3 Spaces', action: i => movePlayerRelative(i, -3) },
+    { text: 'Go to Jail', action: i => sendToJail(players[i]) },
+    { text: 'Make general repairs on all your property', action: i => {} },
+    { text: 'Pay poor tax of $15', action: i => changeMoney(i, -15) },
+    { text: 'Take a trip to Reading Railroad', action: i => movePlayer(i, 5, true) },
+    { text: 'Take a walk on the Boardwalk', action: i => movePlayer(i, 39) },
+    { text: 'You have been elected Chairman of the Board – Pay each player $50', action: i => payEachPlayer(i, 50) },
+    { text: 'Your building loan matures – Collect $150', action: i => changeMoney(i, 150) },
+    { text: 'You have won a crossword competition – Collect $100', action: i => changeMoney(i, 100) },
+  ]);
+  chestDeck = shuffle([
+    { text: 'Advance to Go (Collect $200)', action: i => movePlayer(i, 0, true) },
+    { text: 'Bank error in your favor – Collect $200', action: i => changeMoney(i, 200) },
+    { text: 'Doctor\'s fees – Pay $50', action: i => changeMoney(i, -50) },
+    { text: 'From sale of stock you get $50', action: i => changeMoney(i, 50) },
+    { text: 'Get Out of Jail Free', action: i => { players[i].items.getOutOfJail++; } },
+    { text: 'Go to Jail – Go directly to jail', action: i => sendToJail(players[i]) },
+    { text: 'Grand Opera Night – Collect $50 from every player', action: i => collectFromAll(i, 50) },
+    { text: 'Holiday Fund matures – Receive $100', action: i => changeMoney(i, 100) },
+    { text: 'Income tax refund – Collect $20', action: i => changeMoney(i, 20) },
+    { text: 'It is your birthday – Collect $10 from every player', action: i => collectFromAll(i, 10) },
+    { text: 'Life insurance matures – Collect $100', action: i => changeMoney(i, 100) },
+    { text: 'Pay hospital fees of $100', action: i => changeMoney(i, -100) },
+    { text: 'Pay school fees of $150', action: i => changeMoney(i, -150) },
+    { text: 'Receive $25 consultancy fee', action: i => changeMoney(i, 25) },
+    { text: 'You are assessed for street repairs – $40 per house', action: i => {} },
+    { text: 'You have won second prize in a beauty contest – Collect $10', action: i => changeMoney(i, 10) },
+    { text: 'You inherit $100', action: i => changeMoney(i, 100) },
+  ]);
+}
+
+initDecks();
+
+function changeMoney(idx, amount) {
+  const player = players[idx];
+  if (!player) return;
+  player.money += amount;
+  const action = amount >= 0 ? 'received' : 'paid';
+  log(`${player.name} ${action} $${Math.abs(amount)}.`, idx);
+}
+
+function payEachPlayer(idx, amount) {
+  players.forEach((p, i) => {
+    if (i !== idx) {
+      p.money += amount;
+      players[idx].money -= amount;
+    }
+  });
+  log(`${players[idx].name} paid each player $${amount}.`, idx);
+}
+
+function collectFromAll(idx, amount) {
+  players.forEach((p, i) => {
+    if (i !== idx) {
+      p.money -= amount;
+      players[idx].money += amount;
+    }
+  });
+  log(`${players[idx].name} collected $${amount} from every player.`, idx);
+}
+
+function movePlayer(idx, target, passGo = false) {
+  const player = players[idx];
+  if (!player) return;
+  const old = player.position;
+  if (passGo && target < old) {
+    player.money += 200;
+    log(`${player.name} passed Go and collected $200.`, idx);
+  }
+  player.position = target;
+  handleLanding(player, idx);
+}
+
+function movePlayerRelative(idx, offset) {
+  const player = players[idx];
+  if (!player) return;
+  const newPos = (player.position + offset + BOARD_SIZE) % BOARD_SIZE;
+  movePlayer(idx, newPos, newPos < player.position);
+}
+
+function moveToNearest(idx, targets, doubleRent) {
+  const player = players[idx];
+  if (!player) return;
+  const pos = player.position;
+  let next = targets.find(t => t > pos);
+  if (next === undefined) next = targets[0];
+  movePlayer(idx, next, next < pos);
+  if (doubleRent) {
+    chargeRent(players[idx], next, true);
+  }
+}
+
+function sendToJail(player) {
+  player.position = 10;
+  player.inJail = true;
+  player.jailTurns = 0;
+  log(`${player.name} was sent to Jail.`, players.indexOf(player));
+}
+
+function chargeRent(player, index, doubleRent) {
+  const ownerIdx = propertyOwners[index];
+  if (ownerIdx == null || ownerIdx === players.indexOf(player)) return;
+  const rent = PROPERTY_INFO[index].rent * (doubleRent ? 2 : 1);
+  player.money -= rent;
+  players[ownerIdx].money += rent;
+  log(`${player.name} paid $${rent} rent to ${players[ownerIdx].name}.`, players.indexOf(player));
+}
+
+function handleLanding(player, idx) {
+  const pos = player.position;
+  const name = SPACE_NAMES[pos];
+  log(`${player.name} landed on ${name}.`, idx);
+
+  if (pos === 30) { // Go to jail
+    sendToJail(player);
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    return;
+  }
+
+  if ([2,17,33].includes(pos)) {
+    drawChest(idx);
+    return;
+  }
+  if ([7,22,36].includes(pos)) {
+    drawChance(idx);
+    return;
+  }
+
+  if (PROPERTY_INFO[pos].price) {
+    chargeRent(player, pos);
+  }
+
+  if (pos === 4) changeMoney(idx, -200); // income tax
+  if (pos === 38) changeMoney(idx, -100); // luxury tax
+
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+}
+
+function drawChance(idx) {
+  if (chanceDeck.length === 0) initDecks();
+  const card = chanceDeck.shift();
+  log(`${players[idx].name} drew Chance: ${card.text}`, idx);
+  card.action(idx);
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+}
+
+function drawChest(idx) {
+  if (chestDeck.length === 0) initDecks();
+  const card = chestDeck.shift();
+  log(`${players[idx].name} drew Community Chest: ${card.text}`, idx);
+  card.action(idx);
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+}
 
 function startTurnTimer() {
   clearTimeout(turnTimer);
@@ -126,10 +309,20 @@ io.on('connection', socket => {
       socket.emit('message', 'Game is full');
       return;
     }
-    const player = { id: socket.id, name, position: 0, money: 1500, properties: [], hasRolled: false };
+    const player = {
+      id: socket.id,
+      name,
+      position: 0,
+      money: 1500,
+      properties: [],
+      hasRolled: false,
+      inJail: false,
+      jailTurns: 0,
+      items: { getOutOfJail: 0 }
+    };
     players.push(player);
     socket.emit('joined', socket.id);
-    io.emit('message', `${name} joined the game.`);
+    log(`${name} joined the game.`);
     io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
     if (players.length === 1) {
       io.to(players[0].id).emit('yourTurn');
@@ -147,17 +340,35 @@ io.on('connection', socket => {
     }
     if (player.hasRolled) return;
     player.hasRolled = true;
+
     const roll1 = Math.floor(Math.random() * 6) + 1;
     const roll2 = Math.floor(Math.random() * 6) + 1;
     const total = roll1 + roll2;
-    const oldPos = player.position;
-    player.position = (player.position + total) % BOARD_SIZE;
-    if (player.position < oldPos) {
-      player.money += 200;
-      io.emit('message', `${player.name} passed Go and collected $200.`);
+    log(`${player.name} rolled ${roll1} and ${roll2} (total ${total})`, currentTurn);
+
+    if (player.inJail) {
+      if (roll1 === roll2) {
+        player.inJail = false;
+        player.jailTurns = 0;
+        log(`${player.name} rolled doubles and got out of jail!`, currentTurn);
+        movePlayerRelative(currentTurn, total);
+      } else {
+        player.jailTurns++;
+        log(`${player.name} failed to roll doubles in jail (${player.jailTurns}/3).`, currentTurn);
+        if (player.jailTurns >= 3) {
+          changeMoney(currentTurn, -50);
+          player.inJail = false;
+          player.jailTurns = 0;
+          movePlayerRelative(currentTurn, total);
+        }
+      }
+      io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+      startTurnTimer();
+      return;
     }
-    io.emit('message', `${player.name} rolled ${roll1} and ${roll2} (total ${total})`);
-    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+
+    movePlayerRelative(currentTurn, total);
+
     if (roll1 === roll2) {
       player.hasRolled = false;
       io.to(player.id).emit('yourTurn');
@@ -180,9 +391,32 @@ io.on('connection', socket => {
     player.money -= info.price;
     player.properties.push(index);
     propertyOwners[index] = players.indexOf(player);
-    io.emit('message', `${player.name} bought ${SPACE_NAMES[index]} for $${info.price}.`);
+    log(`${player.name} bought ${SPACE_NAMES[index]} for $${info.price}.`, players.indexOf(player));
     io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
     startTurnTimer();
+  });
+
+  socket.on('payJail', () => {
+    const player = players[currentTurn];
+    if (!player || player.id !== socket.id || !player.inJail) return;
+    changeMoney(currentTurn, -50);
+    player.inJail = false;
+    player.jailTurns = 0;
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    startTurnTimer();
+  });
+
+  socket.on('useJailCard', () => {
+    const player = players[currentTurn];
+    if (!player || player.id !== socket.id || !player.inJail) return;
+    if (player.items.getOutOfJail > 0) {
+      player.items.getOutOfJail--;
+      player.inJail = false;
+      player.jailTurns = 0;
+      log(`${player.name} used a Get Out of Jail Free card.`, currentTurn);
+      io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+      startTurnTimer();
+    }
   });
 
   socket.on('endTurn', () => {
@@ -202,7 +436,7 @@ io.on('connection', socket => {
     propertyOwners = propertyOwners.map(o => (o === idx ? null : o));
     // adjust indices for owners after the leaving player
     propertyOwners = propertyOwners.map(o => (o !== null && o > idx ? o - 1 : o));
-    io.emit('message', `${leaving.name} left the game.`);
+    log(`${leaving.name} left the game.`);
     io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
 
     if (players.length === 0) {
