@@ -150,7 +150,10 @@ io.on('connection', socket => {
     const player = players.find(p => p.id === socket.id);
     if (!player) return;
     const info = PROPERTY_INFO[index];
-    if (!info || !info.price || propertyOwners[index]) return;
+    // propertyOwners stores the index of the owning player or null when
+    // unowned. A value of 0 is a valid owner index, so we must explicitly
+    // check for null/undefined rather than relying on truthiness.
+    if (!info || !info.price || propertyOwners[index] != null) return;
     if (player.money < info.price) return;
     player.money -= info.price;
     player.properties.push(index);
