@@ -5,15 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Board Game Dice Roller</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 20px; }
-        #log { border: 1px solid #ccc; height: 200px; overflow-y: scroll; padding: 5px; }
-        #board { display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, 1fr); gap: 2px; max-width: 90vmin; max-height: 90vmin; margin: 20px auto; }
-        .space { border: 1px solid #999; position: relative; min-height: 40px; }
-        .token { width: 15px; height: 15px; border-radius: 50%; position: absolute; top: 2px; left: 2px; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        #layout { display: flex; gap: 20px; }
+        #controls, #stats { width: 150px; }
+        #boardWrapper { flex: 1; display: flex; justify-content: center; }
+        #board { position: relative; display: grid; grid-template-columns: repeat(11, 1fr); grid-template-rows: repeat(11, 1fr); max-width: 80vmin; max-height: 80vmin; }
+        #log { grid-column: 2 / 11; grid-row: 2 / 11; border: 1px solid #ccc; overflow-y: scroll; background: #fff; padding: 5px; }
+        .space { border: 1px solid #999; position: relative; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+        .space .tokens { display: flex; gap: 2px; flex-wrap: wrap; margin-top: auto; padding-bottom: 2px; }
+        .token { width: 14px; height: 14px; border-radius: 50%; }
         .p0 { background: red; }
         .p1 { background: blue; }
         .p2 { background: green; }
         .p3 { background: yellow; }
+        .property { border-top: 10px solid; }
     </style>
 </head>
 <body>
@@ -23,9 +28,17 @@
         <button id="joinBtn">Join Game</button>
     </div>
     <div id="game" style="display:none;">
-        <button id="rollBtn">Roll Dice</button>
-        <div id="board"></div>
-        <div id="log"></div>
+        <div id="layout">
+            <div id="controls">
+                <button id="rollBtn">Roll Dice</button>
+            </div>
+            <div id="boardWrapper">
+                <div id="board">
+                    <div id="log"></div>
+                </div>
+            </div>
+            <div id="stats"></div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
