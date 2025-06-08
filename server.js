@@ -11,45 +11,45 @@ app.use(express.static('public'));
 const BOARD_SIZE = 40; // spaces around the board
 const PROPERTY_INFO = [
   { price: 0 },
-  { price: 60 },
+  { price: 60, group: 'brown', houseCost: 50 },
   { price: 0 },
-  { price: 60 },
+  { price: 60, group: 'brown', houseCost: 50 },
   { price: 0 },
   { price: 200 },
-  { price: 100 },
+  { price: 100, group: 'lightblue', houseCost: 50 },
   { price: 0 },
-  { price: 100 },
-  { price: 120 },
+  { price: 100, group: 'lightblue', houseCost: 50 },
+  { price: 120, group: 'lightblue', houseCost: 50 },
   { price: 0 },
-  { price: 140 },
+  { price: 140, group: 'pink', houseCost: 100 },
   { price: 150 },
-  { price: 140 },
-  { price: 160 },
+  { price: 140, group: 'pink', houseCost: 100 },
+  { price: 160, group: 'pink', houseCost: 100 },
   { price: 200 },
-  { price: 180 },
+  { price: 180, group: 'orange', houseCost: 100 },
   { price: 0 },
-  { price: 180 },
+  { price: 180, group: 'orange', houseCost: 100 },
+  { price: 200, group: 'orange', houseCost: 100 },
+  { price: 0 },
+  { price: 220, group: 'red', houseCost: 150 },
+  { price: 0 },
+  { price: 220, group: 'red', houseCost: 150 },
+  { price: 240, group: 'red', houseCost: 150 },
   { price: 200 },
-  { price: 0 },
-  { price: 220 },
-  { price: 0 },
-  { price: 220 },
-  { price: 240 },
-  { price: 200 },
-  { price: 260 },
-  { price: 260 },
+  { price: 260, group: 'yellow', houseCost: 150 },
+  { price: 260, group: 'yellow', houseCost: 150 },
   { price: 150 },
-  { price: 280 },
+  { price: 280, group: 'yellow', houseCost: 150 },
   { price: 0 },
-  { price: 300 },
-  { price: 300 },
+  { price: 300, group: 'green', houseCost: 200 },
+  { price: 300, group: 'green', houseCost: 200 },
   { price: 0 },
-  { price: 320 },
+  { price: 320, group: 'green', houseCost: 200 },
   { price: 200 },
   { price: 0 },
-  { price: 350 },
+  { price: 350, group: 'blue', houseCost: 200 },
   { price: 0 },
-  { price: 400 }
+  { price: 400, group: 'blue', houseCost: 200 }
 ].map(info => ({ ...info, rent: info.price ? Math.ceil(info.price / 10) : 0 }));
 const SPACE_NAMES = [
   'Go',
@@ -94,11 +94,55 @@ const SPACE_NAMES = [
   'Boardwalk'
 ];
 let propertyOwners = Array(BOARD_SIZE).fill(null);
+let propertyMortgaged = Array(BOARD_SIZE).fill(false);
+let propertyHouses = Array(BOARD_SIZE).fill(0); // 0-4 houses, 5=hotel
 let players = [];
 let currentTurn = 0;
 const TURN_TIMEOUT_MS = 20000;
 let turnTimer = null;
 const COLORS = ['red', 'blue', 'green', 'yellow'];
+
+function hasMonopoly(playerIdx, group) {
+  const indices = PROPERTY_INFO.map((p, i) => ({...p, index: i}))
+    .filter(p => p.group === group)
+    .map(p => p.index);
+  return indices.every(i => propertyOwners[i] === playerIdx);
+}
+
+function eliminatePlayer(idx) {
+  const [out] = players.splice(idx, 1);
+  propertyOwners = propertyOwners.map(o => (o === idx ? null : o));
+  propertyMortgaged = propertyMortgaged.map((m, i) => (propertyOwners[i] === null ? false : m));
+  propertyHouses = propertyHouses.map((h, i) => (propertyOwners[i] === null ? 0 : h));
+  propertyOwners = propertyOwners.map(o => (o !== null && o > idx ? o - 1 : o));
+  log(`${out.name} was eliminated from the game.`);
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+
+  if (players.length === 0) {
+    currentTurn = 0;
+    propertyOwners = Array(BOARD_SIZE).fill(null);
+    propertyMortgaged = Array(BOARD_SIZE).fill(false);
+    propertyHouses = Array(BOARD_SIZE).fill(0);
+    clearTimeout(turnTimer);
+    return;
+  }
+
+  if (idx < currentTurn) {
+    currentTurn--;
+  }
+
+  if (idx === currentTurn) {
+    currentTurn = currentTurn % players.length;
+    players[currentTurn].hasRolled = false;
+    io.to(players[currentTurn].id).emit('yourTurn');
+    players.forEach(p => {
+      if (p.id !== players[currentTurn].id) {
+        io.to(p.id).emit('notYourTurn');
+      }
+    });
+    startTurnTimer();
+  }
+}
 
 function log(message, playerIdx) {
   if (playerIdx != null) {
@@ -230,7 +274,23 @@ function sendToJail(player) {
 function chargeRent(player, index, doubleRent) {
   const ownerIdx = propertyOwners[index];
   if (ownerIdx == null || ownerIdx === players.indexOf(player)) return;
-  const rent = PROPERTY_INFO[index].rent * (doubleRent ? 2 : 1);
+  if (propertyMortgaged[index]) return; // no rent on mortgaged property
+
+  let rent = PROPERTY_INFO[index].rent;
+
+  // monopoly bonus
+  const info = PROPERTY_INFO[index];
+  if (info.group && hasMonopoly(ownerIdx, info.group) && propertyHouses[index] === 0) {
+    rent *= 2;
+  }
+
+  // houses/hotel multiplier (simple scaling)
+  if (propertyHouses[index] > 0) {
+    rent *= (1 + propertyHouses[index]);
+  }
+
+  if (doubleRent) rent *= 2;
+
   player.money -= rent;
   players[ownerIdx].money += rent;
   log(`${player.name} paid $${rent} rent to ${players[ownerIdx].name}.`, players.indexOf(player));
@@ -243,7 +303,7 @@ function handleLanding(player, idx) {
 
   if (pos === 30) { // Go to jail
     sendToJail(player);
-    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
     return;
   }
 
@@ -263,7 +323,7 @@ function handleLanding(player, idx) {
   if (pos === 4) changeMoney(idx, -200); // income tax
   if (pos === 38) changeMoney(idx, -100); // luxury tax
 
-  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
 }
 
 function drawChance(idx) {
@@ -271,7 +331,7 @@ function drawChance(idx) {
   const card = chanceDeck.shift();
   log(`${players[idx].name} drew Chance: ${card.text}`, idx);
   card.action(idx);
-  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
 }
 
 function drawChest(idx) {
@@ -279,7 +339,7 @@ function drawChest(idx) {
   const card = chestDeck.shift();
   log(`${players[idx].name} drew Community Chest: ${card.text}`, idx);
   card.action(idx);
-  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
 }
 
 function startTurnTimer() {
@@ -291,7 +351,13 @@ function startTurnTimer() {
 
 function endCurrentTurn() {
   if (players.length === 0) return;
-  currentTurn = (currentTurn + 1) % players.length;
+  let idx = currentTurn;
+  if (players[idx].money < 0) {
+    eliminatePlayer(idx);
+    if (players.length === 0) return;
+    if (idx >= players.length) idx = 0;
+  }
+  currentTurn = (idx + 1) % players.length;
   players[currentTurn].hasRolled = false;
   io.to(players[currentTurn].id).emit('yourTurn');
   players.forEach(p => {
@@ -299,7 +365,7 @@ function endCurrentTurn() {
       io.to(p.id).emit('notYourTurn');
     }
   });
-  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
   startTurnTimer();
 }
 
@@ -323,7 +389,7 @@ io.on('connection', socket => {
     players.push(player);
     socket.emit('joined', socket.id);
     log(`${name} joined the game.`);
-    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
     if (players.length === 1) {
       io.to(players[0].id).emit('yourTurn');
       startTurnTimer();
@@ -362,7 +428,7 @@ io.on('connection', socket => {
           movePlayerRelative(currentTurn, total);
         }
       }
-      io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+      io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
       startTurnTimer();
       return;
     }
@@ -391,8 +457,63 @@ io.on('connection', socket => {
     player.money -= info.price;
     player.properties.push(index);
     propertyOwners[index] = players.indexOf(player);
+    propertyMortgaged[index] = false;
+    propertyHouses[index] = 0;
     log(`${player.name} bought ${SPACE_NAMES[index]} for $${info.price}.`, players.indexOf(player));
-    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+    startTurnTimer();
+  });
+
+  socket.on('mortgageProperty', index => {
+    const playerIdx = players.findIndex(p => p.id === socket.id);
+    if (playerIdx === -1) return;
+    if (propertyOwners[index] !== playerIdx) return;
+    if (propertyMortgaged[index]) {
+      // unmortgage
+      const cost = Math.floor(PROPERTY_INFO[index].price / 2 * 1.1);
+      if (players[playerIdx].money < cost) return;
+      players[playerIdx].money -= cost;
+      propertyMortgaged[index] = false;
+      log(`${players[playerIdx].name} unmortgaged ${SPACE_NAMES[index]} for $${cost}.`, playerIdx);
+    } else {
+      propertyMortgaged[index] = true;
+      const value = Math.floor(PROPERTY_INFO[index].price / 2);
+      players[playerIdx].money += value;
+      log(`${players[playerIdx].name} mortgaged ${SPACE_NAMES[index]} for $${value}.`, playerIdx);
+    }
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+    startTurnTimer();
+  });
+
+  socket.on('buyHouse', index => {
+    const playerIdx = players.findIndex(p => p.id === socket.id);
+    if (playerIdx === -1) return;
+    const info = PROPERTY_INFO[index];
+    if (!info.group || propertyOwners[index] !== playerIdx) return;
+    if (!hasMonopoly(playerIdx, info.group)) return;
+    if (propertyHouses[index] >= 5) return;
+    const cost = info.houseCost;
+    if (players[playerIdx].money < cost) return;
+    players[playerIdx].money -= cost;
+    propertyHouses[index] += 1;
+    const desc = propertyHouses[index] === 5 ? 'a hotel' : 'a house';
+    log(`${players[playerIdx].name} bought ${desc} on ${SPACE_NAMES[index]} for $${cost}.`, playerIdx);
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+    startTurnTimer();
+  });
+
+  socket.on('sellHouse', index => {
+    const playerIdx = players.findIndex(p => p.id === socket.id);
+    if (playerIdx === -1) return;
+    if (propertyOwners[index] !== playerIdx) return;
+    if (propertyHouses[index] <= 0) return;
+    const info = PROPERTY_INFO[index];
+    propertyHouses[index] -= 1;
+    const value = Math.floor(info.houseCost / 2);
+    players[playerIdx].money += value;
+    const desc = propertyHouses[index] === 4 ? 'sold a hotel' : 'sold a house';
+    log(`${players[playerIdx].name} ${desc} on ${SPACE_NAMES[index]} for $${value}.`, playerIdx);
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
     startTurnTimer();
   });
 
@@ -402,7 +523,7 @@ io.on('connection', socket => {
     changeMoney(currentTurn, -50);
     player.inJail = false;
     player.jailTurns = 0;
-    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
     startTurnTimer();
   });
 
@@ -414,7 +535,7 @@ io.on('connection', socket => {
       player.inJail = false;
       player.jailTurns = 0;
       log(`${player.name} used a Get Out of Jail Free card.`, currentTurn);
-      io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+      io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
       startTurnTimer();
     }
   });
@@ -434,14 +555,18 @@ io.on('connection', socket => {
 
     const [leaving] = players.splice(idx, 1);
     propertyOwners = propertyOwners.map(o => (o === idx ? null : o));
+    propertyMortgaged = propertyMortgaged.map((m, i) => (propertyOwners[i] === null ? false : m));
+    propertyHouses = propertyHouses.map((h, i) => (propertyOwners[i] === null ? 0 : h));
     // adjust indices for owners after the leaving player
     propertyOwners = propertyOwners.map(o => (o !== null && o > idx ? o - 1 : o));
     log(`${leaving.name} left the game.`);
-    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
 
     if (players.length === 0) {
       currentTurn = 0;
       propertyOwners = Array(BOARD_SIZE).fill(null);
+      propertyMortgaged = Array(BOARD_SIZE).fill(false);
+      propertyHouses = Array(BOARD_SIZE).fill(0);
       clearTimeout(turnTimer);
       return;
     }

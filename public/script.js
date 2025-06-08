@@ -57,6 +57,8 @@ const spaces = [
 let boardCoords = [];
 let players = [];
 let propertyOwners = [];
+let propertyMortgaged = [];
+let propertyHouses = [];
 let playerId = null;
 
 joinBtn.onclick = () => {
@@ -129,6 +131,8 @@ socket.on('state', state => {
     boardSize = state.boardSize;
     players = state.players;
     propertyOwners = state.propertyOwners || [];
+    propertyMortgaged = state.propertyMortgaged || [];
+    propertyHouses = state.propertyHouses || [];
     if (boardCoords.length === 0) {
         buildBoard();
     }
@@ -159,7 +163,7 @@ function buildBoard() {
         div.style.gridRowStart = pos.row + 1;
         div.style.gridColumnStart = pos.col + 1;
         const price = spaceData.price ? `<div>$${spaceData.price}</div>` : '';
-        div.innerHTML = `<div>${spaceData.icon || ''}</div><div>${spaceData.name}</div>${price}<div class="tokens"></div>`;
+        div.innerHTML = `<div>${spaceData.icon || ''}</div><div>${spaceData.name}</div>${price}<div class="buildings"></div><div class="tokens"></div>`;
         boardDiv.appendChild(div);
     });
 }
@@ -180,12 +184,22 @@ function renderTokens() {
 
 function renderOwnership() {
     document.querySelectorAll('.space').forEach(div => {
-        div.classList.remove('owned-0', 'owned-1', 'owned-2', 'owned-3');
+        div.classList.remove('owned-0', 'owned-1', 'owned-2', 'owned-3', 'mortgaged');
+        const b = div.querySelector('.buildings');
+        if (b) b.textContent = '';
     });
     propertyOwners.forEach((owner, idx) => {
-        if (owner == null) return;
         const space = boardDiv.querySelector(`.space[data-index="${idx}"]`);
-        if (space) space.classList.add(`owned-${owner}`);
+        if (!space) return;
+        if (owner != null) space.classList.add(`owned-${owner}`);
+        if (propertyMortgaged[idx]) space.classList.add('mortgaged');
+        const b = space.querySelector('.buildings');
+        if (b) {
+            const count = propertyHouses[idx] || 0;
+            if (count > 0) {
+                b.textContent = count === 5 ? '🏨' : '🏠'.repeat(count);
+            }
+        }
     });
 }
 
@@ -197,7 +211,19 @@ function renderStats() {
         div.style.padding = '4px';
         div.style.marginBottom = '4px';
         const cardInfo = p.items && p.items.getOutOfJail ? `Get Out of Jail: ${p.items.getOutOfJail}` : '';
-        div.innerHTML = `<strong style="color:${getTokenColor(idx)}">${p.name}</strong><br>$${p.money}<br>${p.properties.map(i => spaces[i].name).join(', ')}<br>${cardInfo}`;
+        let props = p.properties.map(i => {
+            const mort = propertyMortgaged[i];
+            const houses = propertyHouses[i] || 0;
+            let html = `${spaces[i].name} ${mort ? '(M)' : ''} ${houses>0 ? 'H:'+houses : ''}`;
+            if (p.id === playerId) {
+                const mortBtn = `<button data-act="mortgage" data-index="${i}">${mort?'Unmortgage':'Mortgage'}</button>`;
+                const buyBtn = !mort && houses < 5 ? `<button data-act="buyHouse" data-index="${i}">+House</button>` : '';
+                const sellBtn = houses > 0 ? `<button data-act="sellHouse" data-index="${i}">Sell</button>` : '';
+                html += ` ${mortBtn}${buyBtn}${sellBtn}`;
+            }
+            return `<div>${html}</div>`;
+        }).join('');
+        div.innerHTML = `<strong style="color:${getTokenColor(idx)}">${p.name}</strong><br>$${p.money}<br>${props}<br>${cardInfo}`;
         statsDiv.appendChild(div);
     });
 }
@@ -229,3 +255,12 @@ function updateJailButtons() {
     payJailBtn.disabled = false;
     useCardBtn.disabled = me.items.getOutOfJail <= 0;
 }
+
+statsDiv.addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') return;
+    const idx = parseInt(e.target.dataset.index, 10);
+    const act = e.target.dataset.act;
+    if (act === 'mortgage') socket.emit('mortgageProperty', idx);
+    if (act === 'buyHouse') socket.emit('buyHouse', idx);
+    if (act === 'sellHouse') socket.emit('sellHouse', idx);
+});
