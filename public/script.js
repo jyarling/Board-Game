@@ -129,7 +129,7 @@ tradeCancelBtn.onclick = () => {
     currentTrade = null;
 };
 
-tradeUpdateBtn.onclick = () => {
+function sendTradeUpdate() {
     if (!currentTrade) return;
     const offer = {
         money: parseInt(yourMoneyInput.value, 10) || 0,
@@ -137,7 +137,16 @@ tradeUpdateBtn.onclick = () => {
         properties: Array.from(yourPropsDiv.querySelectorAll('input:checked')).map(c => parseInt(c.value, 10))
     };
     socket.emit('updateTrade', { id: currentTrade.id, offer });
-};
+}
+
+tradeUpdateBtn.onclick = sendTradeUpdate;
+
+// Live update trade offer when user changes inputs
+yourMoneyInput.addEventListener('input', sendTradeUpdate);
+yourCardsInput.addEventListener('input', sendTradeUpdate);
+yourPropsDiv.addEventListener('change', e => {
+    if (e.target.tagName === 'INPUT') sendTradeUpdate();
+});
 
 tradeAcceptBtn.onclick = () => {
     if (!currentTrade) return;
@@ -396,7 +405,7 @@ function populateTradeWindow() {
     players[otherIdx].properties.forEach(i => {
         if (!propertyMortgaged[i]) {
             const cb = document.createElement('label');
-            cb.innerHTML = `<input type="checkbox" value="${i}"> ${spaces[i].name}`;
+            cb.innerHTML = `<input type="checkbox" value="${i}" disabled> ${spaces[i].name}`;
             if (currentTrade.playerA === otherIdx ? currentTrade.offerA.properties.includes(i) : currentTrade.offerB.properties.includes(i)) {
                 cb.querySelector('input').checked = true;
             }
@@ -419,5 +428,9 @@ function populateTradeWindow() {
         tradeStatusDiv.textContent = currentTrade.acceptedB ? 'You accepted' : '';
         if (currentTrade.acceptedA) tradeStatusDiv.textContent += ' | Opponent accepted';
     }
+
+    // Opponent fields should be read-only
+    theirMoneyInput.disabled = true;
+    theirCardsInput.disabled = true;
 }
 
