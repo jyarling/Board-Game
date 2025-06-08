@@ -85,6 +85,16 @@
         </div>
     </div>
 
+    <div id="auctionModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+        <div style="background:#fff; padding:10px; max-width:250px; text-align:center;">
+            <h3 id="auctionTitle"></h3>
+            <div>Current Bid: $<span id="auctionBid">0</span> <span id="auctionBidder"></span></div>
+            <div id="auctionCountdown" style="margin:5px 0;"></div>
+            <button id="auctionBidBtn">Bid</button>
+            <button id="auctionCloseBtn" style="display:none;">Close</button>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
