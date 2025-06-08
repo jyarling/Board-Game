@@ -8,14 +8,21 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
+const BOARD_SIZE = 20; // spaces around the board
 let players = [];
 let currentTurn = 0;
 
 io.on('connection', socket => {
   socket.on('joinGame', name => {
-    players.push({ id: socket.id, name });
+    if (players.length >= 4) {
+      socket.emit('message', 'Game is full');
+      return;
+    }
+    const player = { id: socket.id, name, position: 0 };
+    players.push(player);
     socket.emit('joined', socket.id);
     io.emit('message', `${name} joined the game.`);
+    io.emit('state', { players, boardSize: BOARD_SIZE });
     if (players.length === 1) {
       io.to(players[0].id).emit('yourTurn');
     } else {
@@ -29,8 +36,12 @@ io.on('connection', socket => {
       socket.emit('notYourTurn');
       return;
     }
-    const roll = Math.floor(Math.random() * 6) + 1;
-    io.emit('message', `${player.name} rolled a ${roll}`);
+    const roll1 = Math.floor(Math.random() * 6) + 1;
+    const roll2 = Math.floor(Math.random() * 6) + 1;
+    const total = roll1 + roll2;
+    player.position = (player.position + total) % BOARD_SIZE;
+    io.emit('message', `${player.name} rolled ${roll1} and ${roll2} (total ${total})`);
+    io.emit('state', { players, boardSize: BOARD_SIZE });
     currentTurn = (currentTurn + 1) % players.length;
     io.to(players[currentTurn].id).emit('yourTurn');
     players.forEach(p => {
@@ -46,6 +57,7 @@ io.on('connection', socket => {
 
     const [leaving] = players.splice(idx, 1);
     io.emit('message', `${leaving.name} left the game.`);
+    io.emit('state', { players, boardSize: BOARD_SIZE });
 
     if (players.length === 0) {
       currentTurn = 0;
