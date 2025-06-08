@@ -101,6 +101,7 @@ let currentTurn = 0;
 const TURN_TIMEOUT_MS = 20000;
 let turnTimer = null;
 const COLORS = ['red', 'blue', 'green', 'yellow'];
+let trades = [];
 
 function hasMonopoly(playerIdx, group) {
   const indices = PROPERTY_INFO.map((p, i) => ({...p, index: i}))
@@ -231,6 +232,40 @@ function collectFromAll(idx, amount) {
     }
   });
   log(`${players[idx].name} collected $${amount} from every player.`, idx);
+}
+
+function finalizeTrade(trade) {
+  const a = players[trade.playerA];
+  const b = players[trade.playerB];
+  if (!a || !b) return;
+  if (a.money < trade.offerA.money || b.money < trade.offerB.money) return;
+  if (trade.offerA.properties.some(i => propertyOwners[i] !== trade.playerA || propertyMortgaged[i])) return;
+  if (trade.offerB.properties.some(i => propertyOwners[i] !== trade.playerB || propertyMortgaged[i])) return;
+  if (a.items.getOutOfJail < trade.offerA.cards || b.items.getOutOfJail < trade.offerB.cards) return;
+
+  a.money -= trade.offerA.money;
+  b.money += trade.offerA.money;
+  b.money -= trade.offerB.money;
+  a.money += trade.offerB.money;
+
+  trade.offerA.properties.forEach(i => {
+    propertyOwners[i] = trade.playerB;
+    a.properties = a.properties.filter(p => p !== i);
+    b.properties.push(i);
+  });
+  trade.offerB.properties.forEach(i => {
+    propertyOwners[i] = trade.playerA;
+    b.properties = b.properties.filter(p => p !== i);
+    a.properties.push(i);
+  });
+
+  a.items.getOutOfJail -= trade.offerA.cards;
+  b.items.getOutOfJail += trade.offerA.cards;
+  b.items.getOutOfJail -= trade.offerB.cards;
+  a.items.getOutOfJail += trade.offerB.cards;
+
+  log(`${a.name} traded with ${b.name}.`);
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
 }
 
 function movePlayer(idx, target, passGo = false) {
@@ -538,6 +573,65 @@ io.on('connection', socket => {
       io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
       startTurnTimer();
     }
+  });
+
+  socket.on('initiateTrade', targetIdx => {
+    const playerIdx = players.findIndex(p => p.id === socket.id);
+    if (playerIdx === -1 || playerIdx !== currentTurn) return;
+    if (targetIdx < 0 || targetIdx >= players.length || targetIdx === playerIdx) return;
+    const trade = {
+      id: Date.now() + Math.random(),
+      playerA: playerIdx,
+      playerB: targetIdx,
+      offerA: { money: 0, properties: [], cards: 0 },
+      offerB: { money: 0, properties: [], cards: 0 },
+      acceptedA: false,
+      acceptedB: false
+    };
+    trades.push(trade);
+    io.to(players[playerIdx].id).emit('tradeStarted', trade);
+    io.to(players[targetIdx].id).emit('tradeStarted', trade);
+  });
+
+  socket.on('updateTrade', data => {
+    const trade = trades.find(t => t.id === data.id);
+    if (!trade) return;
+    const idx = players.findIndex(p => p.id === socket.id);
+    if (idx === trade.playerA) {
+      trade.offerA = data.offer;
+      trade.acceptedA = false;
+      trade.acceptedB = false;
+    } else if (idx === trade.playerB) {
+      trade.offerB = data.offer;
+      trade.acceptedA = false;
+      trade.acceptedB = false;
+    } else return;
+    io.to(players[trade.playerA].id).emit('tradeUpdated', trade);
+    io.to(players[trade.playerB].id).emit('tradeUpdated', trade);
+  });
+
+  socket.on('acceptTrade', id => {
+    const trade = trades.find(t => t.id === id);
+    if (!trade) return;
+    const idx = players.findIndex(p => p.id === socket.id);
+    if (idx === trade.playerA) trade.acceptedA = true;
+    else if (idx === trade.playerB) trade.acceptedB = true;
+    io.to(players[trade.playerA].id).emit('tradeUpdated', trade);
+    io.to(players[trade.playerB].id).emit('tradeUpdated', trade);
+    if (trade.acceptedA && trade.acceptedB) {
+      finalizeTrade(trade);
+      trades = trades.filter(t => t.id !== id);
+      io.to(players[trade.playerA].id).emit('tradeEnded');
+      io.to(players[trade.playerB].id).emit('tradeEnded');
+    }
+  });
+
+  socket.on('cancelTrade', id => {
+    const trade = trades.find(t => t.id === id);
+    if (!trade) return;
+    trades = trades.filter(t => t.id !== id);
+    io.to(players[trade.playerA].id).emit('tradeEnded');
+    io.to(players[trade.playerB].id).emit('tradeEnded');
   });
 
   socket.on('endTurn', () => {
