@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Board Game Dice Roller</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+        #log { border: 1px solid #ccc; height: 200px; overflow-y: scroll; padding: 5px; margin-top: 10px; }
+        #board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 20px; }
+        .space { border: 1px solid #333; height: 60px; position: relative; }
+        .token { width: 12px; height: 12px; border-radius: 50%; position: absolute; top: 4px; left: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Simple Multiplayer Dice Game</h1>
+    <div id="join">
+        <input id="name" placeholder="Your name" />
+        <button id="joinBtn">Join Game</button>
+    </div>
+    <div id="game" style="display:none;">
+        <button id="rollBtn">Roll Dice</button>
+        <div id="board"></div>
+        <div id="log"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
