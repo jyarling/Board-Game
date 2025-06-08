@@ -41,12 +41,29 @@ io.on('connection', socket => {
   });
 
   socket.on('disconnect', () => {
-    players = players.filter(p => p.id !== socket.id);
+    const idx = players.findIndex(p => p.id === socket.id);
+    if (idx === -1) return;
+
+    const [leaving] = players.splice(idx, 1);
+    io.emit('message', `${leaving.name} left the game.`);
+
     if (players.length === 0) {
       currentTurn = 0;
-    } else if (currentTurn >= players.length) {
-      currentTurn = 0;
+      return;
+    }
+
+    if (idx < currentTurn) {
+      currentTurn--;
+    }
+
+    if (idx === currentTurn) {
+      currentTurn = currentTurn % players.length;
       io.to(players[currentTurn].id).emit('yourTurn');
+      players.forEach(p => {
+        if (p.id !== players[currentTurn].id) {
+          io.to(p.id).emit('notYourTurn');
+        }
+      });
     }
   });
 });
