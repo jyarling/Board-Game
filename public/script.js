@@ -271,6 +271,34 @@ function buildBoard() {
     });
 }
 
+function animateTokenMove(token, idx, from, to) {
+    if (from == null) {
+        // place token instantly on first render
+        token.style.transition = 'none';
+        const start = spaceCenters[to];
+        token.style.transform = `translate(${start.x}px, ${start.y}px)`;
+        requestAnimationFrame(() => { token.style.transition = ''; });
+        lastPositions[idx] = to;
+        return;
+    }
+
+    if (from === to) return;
+
+    let current = from;
+    const step = () => {
+        current = (current + 1) % boardSize;
+        const pos = spaceCenters[current];
+        token.style.transitionDuration = '200ms';
+        token.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+        if (current !== to) {
+            token.addEventListener('transitionend', step, { once: true });
+        } else {
+            lastPositions[idx] = to;
+        }
+    };
+    step();
+}
+
 function renderTokens() {
     Object.keys(tokenElems).forEach(i => {
         if (!players[i]) {
@@ -280,8 +308,8 @@ function renderTokens() {
         }
     });
     players.forEach((p, idx) => {
-        const target = spaceCenters[p.position];
-        if (!target) return;
+        const targetPos = p.position;
+        if (spaceCenters[targetPos] == null) return;
         let token = tokenElems[idx];
         if (!token) {
             token = document.createElement('div');
@@ -289,15 +317,8 @@ function renderTokens() {
             token.title = p.name;
             tokenLayer.appendChild(token);
             tokenElems[idx] = token;
-            token.style.transform = `translate(${target.x}px, ${target.y}px)`;
-        } else {
-            const prev = lastPositions[idx];
-            const diff = prev == null ? 1 : Math.abs((p.position - prev + boardSize) % boardSize);
-            const dur = (diff / 5) * 1000;
-            token.style.transitionDuration = dur + 'ms';
-            token.style.transform = `translate(${target.x}px, ${target.y}px)`;
         }
-        lastPositions[idx] = p.position;
+        animateTokenMove(token, idx, lastPositions[idx], targetPos);
     });
 }
 
