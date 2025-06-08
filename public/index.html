@@ -4,28 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Board Game Dice Roller</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        #layout { display: flex; gap: 20px; }
-        #controls, #stats { width: 150px; }
-        #boardWrapper { flex: 1; display: flex; justify-content: center; }
-        #board { position: relative; display: grid; grid-template-columns: repeat(11, 1fr); grid-template-rows: repeat(11, 1fr); max-width: 80vmin; max-height: 80vmin; }
-        #log { grid-column: 2 / 11; grid-row: 2 / 11; border: 1px solid #ccc; overflow-y: scroll; background: #fff; padding: 5px; }
-        .space { border: 1px solid #999; position: relative; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
-        .space .tokens { display: flex; gap: 2px; flex-wrap: wrap; margin-top: auto; padding-bottom: 2px; }
-        .space .buildings { display: flex; gap: 2px; }
-        .token { width: 14px; height: 14px; border-radius: 50%; position:absolute; transition: transform 0.2s linear; }
-        .p0 { background: red; }
-        .p1 { background: blue; }
-        .p2 { background: green; }
-        .p3 { background: yellow; }
-        .property { border-top: 10px solid; }
-        .owned-0 { background: rgba(255,0,0,0.2); }
-        .owned-1 { background: rgba(0,0,255,0.2); }
-        .owned-2 { background: rgba(0,128,0,0.2); }
-        .owned-3 { background: rgba(255,255,0,0.2); }
-        .mortgaged { filter: grayscale(100%) brightness(70%); }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <h1>Simple Multiplayer Dice Game</h1>
