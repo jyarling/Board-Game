@@ -8,7 +8,7 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-const BOARD_SIZE = 20; // spaces around the board
+const BOARD_SIZE = 40; // spaces around the board
 let players = [];
 let currentTurn = 0;
 
