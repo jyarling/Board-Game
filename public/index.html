@@ -14,7 +14,7 @@
         .space { border: 1px solid #999; position: relative; font-size: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
         .space .tokens { display: flex; gap: 2px; flex-wrap: wrap; margin-top: auto; padding-bottom: 2px; }
         .space .buildings { display: flex; gap: 2px; }
-        .token { width: 14px; height: 14px; border-radius: 50%; }
+        .token { width: 14px; height: 14px; border-radius: 50%; position:absolute; transition: transform 0.2s linear; }
         .p0 { background: red; }
         .p1 { background: blue; }
         .p2 { background: green; }
@@ -38,6 +38,7 @@
             <div id="controls">
                 <button id="rollBtn">Roll Dice</button>
                 <button id="buyBtn" disabled>Buy</button>
+                <button id="tradeBtn" disabled>Trade</button>
                 <button id="payJailBtn" disabled>Pay Bail</button>
                 <button id="useCardBtn" disabled>Use Card</button>
                 <button id="endTurnBtn" disabled>End Turn</button>
@@ -45,9 +46,42 @@
             <div id="boardWrapper">
                 <div id="board">
                     <div id="log"></div>
+                    <div id="tokenLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;"></div>
                 </div>
             </div>
             <div id="stats"></div>
+        </div>
+    </div>
+
+    <div id="tradeModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+        <div style="background:#fff; padding:10px; max-width:300px;">
+            <div id="tradeStart" style="display:none;">
+                <label>Trade with:
+                    <select id="tradeTarget"></select>
+                </label>
+                <button id="tradeInitBtn">Start</button>
+            </div>
+            <div id="tradeWindow" style="display:none;">
+                <h3 id="tradeTitle"></h3>
+                <div style="display:flex; gap:10px;">
+                    <div>
+                        <h4>Your Offer</h4>
+                        <div id="yourProps"></div>
+                        <div>Money <input type="number" id="yourMoney" value="0" min="0" style="width:60px"></div>
+                        <div>Cards <input type="number" id="yourCards" value="0" min="0" style="width:60px"></div>
+                    </div>
+                    <div>
+                        <h4>Their Offer</h4>
+                        <div id="theirProps"></div>
+                        <div>Money <input type="number" id="theirMoney" value="0" min="0" style="width:60px"></div>
+                        <div>Cards <input type="number" id="theirCards" value="0" min="0" style="width:60px"></div>
+                    </div>
+                </div>
+                <div id="tradeStatus" style="margin-top:5px;"></div>
+                <button id="tradeUpdateBtn">Update</button>
+                <button id="tradeAcceptBtn">Accept</button>
+                <button id="tradeCancelBtn">Cancel</button>
+            </div>
         </div>
     </div>
 

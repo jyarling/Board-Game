@@ -5,12 +5,30 @@ const nameInput = document.getElementById('name');
 const joinBtn = document.getElementById('joinBtn');
 const rollBtn = document.getElementById('rollBtn');
 const buyBtn = document.getElementById('buyBtn');
+const tradeBtn = document.getElementById('tradeBtn');
 const endTurnBtn = document.getElementById('endTurnBtn');
 const payJailBtn = document.getElementById('payJailBtn');
 const useCardBtn = document.getElementById('useCardBtn');
 const logDiv = document.getElementById('log');
 const boardDiv = document.getElementById('board');
+const tokenLayer = document.getElementById('tokenLayer');
 const statsDiv = document.getElementById('stats');
+const tradeModal = document.getElementById('tradeModal');
+const tradeStartDiv = document.getElementById('tradeStart');
+const tradeWindowDiv = document.getElementById('tradeWindow');
+const tradeTargetSelect = document.getElementById('tradeTarget');
+const tradeInitBtn = document.getElementById('tradeInitBtn');
+const tradeTitle = document.getElementById('tradeTitle');
+const yourPropsDiv = document.getElementById('yourProps');
+const theirPropsDiv = document.getElementById('theirProps');
+const yourMoneyInput = document.getElementById('yourMoney');
+const theirMoneyInput = document.getElementById('theirMoney');
+const yourCardsInput = document.getElementById('yourCards');
+const theirCardsInput = document.getElementById('theirCards');
+const tradeUpdateBtn = document.getElementById('tradeUpdateBtn');
+const tradeAcceptBtn = document.getElementById('tradeAcceptBtn');
+const tradeCancelBtn = document.getElementById('tradeCancelBtn');
+const tradeStatusDiv = document.getElementById('tradeStatus');
 let boardSize = 40;
 const spaces = [
     {name: 'Go', color: '', price: 0},
@@ -55,11 +73,15 @@ const spaces = [
     {name: 'Boardwalk', color: '#0000FF', price: 400}
 ];
 let boardCoords = [];
+let spaceCenters = [];
 let players = [];
 let propertyOwners = [];
 let propertyMortgaged = [];
 let propertyHouses = [];
 let playerId = null;
+let currentTrade = null;
+let lastPositions = {};
+let tokenElems = {};
 
 joinBtn.onclick = () => {
     const name = nameInput.value.trim();
@@ -76,6 +98,50 @@ buyBtn.onclick = () => {
     const me = players.find(p => p.id === playerId);
     if (!me) return;
     socket.emit('buyProperty', me.position);
+};
+
+tradeBtn.onclick = () => {
+    tradeTargetSelect.innerHTML = '';
+    players.forEach((p, idx) => {
+        if (p.id !== playerId) {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = p.name;
+            tradeTargetSelect.appendChild(opt);
+        }
+    });
+    tradeStartDiv.style.display = 'block';
+    tradeWindowDiv.style.display = 'none';
+    tradeModal.style.display = 'flex';
+};
+
+tradeInitBtn.onclick = () => {
+    const target = parseInt(tradeTargetSelect.value, 10);
+    if (isNaN(target)) return;
+    socket.emit('initiateTrade', target);
+};
+
+tradeCancelBtn.onclick = () => {
+    if (currentTrade) {
+        socket.emit('cancelTrade', currentTrade.id);
+    }
+    tradeModal.style.display = 'none';
+    currentTrade = null;
+};
+
+tradeUpdateBtn.onclick = () => {
+    if (!currentTrade) return;
+    const offer = {
+        money: parseInt(yourMoneyInput.value, 10) || 0,
+        cards: parseInt(yourCardsInput.value, 10) || 0,
+        properties: Array.from(yourPropsDiv.querySelectorAll('input:checked')).map(c => parseInt(c.value, 10))
+    };
+    socket.emit('updateTrade', { id: currentTrade.id, offer });
+};
+
+tradeAcceptBtn.onclick = () => {
+    if (!currentTrade) return;
+    socket.emit('acceptTrade', currentTrade.id);
 };
 
 endTurnBtn.onclick = () => {
@@ -115,6 +181,7 @@ socket.on('message', msg => {
 socket.on('yourTurn', () => {
     rollBtn.disabled = false;
     endTurnBtn.disabled = false;
+    tradeBtn.disabled = false;
     updateJailButtons();
     updateBuyButton();
 });
@@ -125,6 +192,7 @@ socket.on('notYourTurn', () => {
     payJailBtn.disabled = true;
     useCardBtn.disabled = true;
     endTurnBtn.disabled = true;
+    tradeBtn.disabled = true;
 });
 
 socket.on('state', state => {
@@ -143,9 +211,29 @@ socket.on('state', state => {
     updateBuyButton();
 });
 
+socket.on('tradeStarted', trade => {
+    currentTrade = trade;
+    tradeStartDiv.style.display = 'none';
+    tradeWindowDiv.style.display = 'block';
+    tradeModal.style.display = 'flex';
+    populateTradeWindow();
+});
+
+socket.on('tradeUpdated', trade => {
+    if (!currentTrade || currentTrade.id !== trade.id) return;
+    currentTrade = trade;
+    populateTradeWindow();
+});
+
+socket.on('tradeEnded', () => {
+    tradeModal.style.display = 'none';
+    currentTrade = null;
+});
+
 function buildBoard() {
     const N = 11; // 11x11 grid => 40 spaces
     boardCoords = [];
+    spaceCenters = [];
     boardDiv.querySelectorAll('.space').forEach(s => s.remove());
     for (let c = N - 1; c >= 0; c--) boardCoords.push({ row: N - 1, col: c });
     for (let r = N - 2; r >= 0; r--) boardCoords.push({ row: r, col: 0 });
@@ -165,20 +253,42 @@ function buildBoard() {
         const price = spaceData.price ? `<div>$${spaceData.price}</div>` : '';
         div.innerHTML = `<div>${spaceData.icon || ''}</div><div>${spaceData.name}</div>${price}<div class="buildings"></div><div class="tokens"></div>`;
         boardDiv.appendChild(div);
+        const rect = div.getBoundingClientRect();
+        const boardRect = boardDiv.getBoundingClientRect();
+        spaceCenters[idx] = {
+            x: rect.left - boardRect.left + rect.width / 2,
+            y: rect.top - boardRect.top + rect.height / 2
+        };
     });
 }
 
 function renderTokens() {
-    document.querySelectorAll('.token').forEach(t => t.remove());
+    Object.keys(tokenElems).forEach(i => {
+        if (!players[i]) {
+            tokenElems[i].remove();
+            delete tokenElems[i];
+            delete lastPositions[i];
+        }
+    });
     players.forEach((p, idx) => {
-        const space = boardDiv.querySelector(`.space[data-index="${p.position}"]`);
-        if (space) {
-            const token = document.createElement('div');
+        const target = spaceCenters[p.position];
+        if (!target) return;
+        let token = tokenElems[idx];
+        if (!token) {
+            token = document.createElement('div');
             token.className = `token p${idx}`;
             token.title = p.name;
-            const container = space.querySelector('.tokens');
-            container.appendChild(token);
+            tokenLayer.appendChild(token);
+            tokenElems[idx] = token;
+            token.style.transform = `translate(${target.x}px, ${target.y}px)`;
+        } else {
+            const prev = lastPositions[idx];
+            const diff = prev == null ? 1 : Math.abs((p.position - prev + boardSize) % boardSize);
+            const dur = (diff / 5) * 1000;
+            token.style.transitionDuration = dur + 'ms';
+            token.style.transform = `translate(${target.x}px, ${target.y}px)`;
         }
+        lastPositions[idx] = p.position;
     });
 }
 
@@ -264,3 +374,50 @@ statsDiv.addEventListener('click', e => {
     if (act === 'buyHouse') socket.emit('buyHouse', idx);
     if (act === 'sellHouse') socket.emit('sellHouse', idx);
 });
+
+function populateTradeWindow() {
+    if (!currentTrade) return;
+    const myIdx = players.findIndex(p => p.id === playerId);
+    const otherIdx = currentTrade.playerA === myIdx ? currentTrade.playerB : currentTrade.playerA;
+    tradeTitle.textContent = `Trading with ${players[otherIdx].name}`;
+
+    yourPropsDiv.innerHTML = '';
+    theirPropsDiv.innerHTML = '';
+    players[myIdx].properties.forEach(i => {
+        if (!propertyMortgaged[i]) {
+            const cb = document.createElement('label');
+            cb.innerHTML = `<input type="checkbox" value="${i}"> ${spaces[i].name}`;
+            if (currentTrade.playerA === myIdx ? currentTrade.offerA.properties.includes(i) : currentTrade.offerB.properties.includes(i)) {
+                cb.querySelector('input').checked = true;
+            }
+            yourPropsDiv.appendChild(cb);
+        }
+    });
+    players[otherIdx].properties.forEach(i => {
+        if (!propertyMortgaged[i]) {
+            const cb = document.createElement('label');
+            cb.innerHTML = `<input type="checkbox" value="${i}"> ${spaces[i].name}`;
+            if (currentTrade.playerA === otherIdx ? currentTrade.offerA.properties.includes(i) : currentTrade.offerB.properties.includes(i)) {
+                cb.querySelector('input').checked = true;
+            }
+            theirPropsDiv.appendChild(cb);
+        }
+    });
+
+    if (currentTrade.playerA === myIdx) {
+        yourMoneyInput.value = currentTrade.offerA.money;
+        yourCardsInput.value = currentTrade.offerA.cards;
+        theirMoneyInput.value = currentTrade.offerB.money;
+        theirCardsInput.value = currentTrade.offerB.cards;
+        tradeStatusDiv.textContent = currentTrade.acceptedA ? 'You accepted' : '';
+        if (currentTrade.acceptedB) tradeStatusDiv.textContent += ' | Opponent accepted';
+    } else {
+        yourMoneyInput.value = currentTrade.offerB.money;
+        yourCardsInput.value = currentTrade.offerB.cards;
+        theirMoneyInput.value = currentTrade.offerA.money;
+        theirCardsInput.value = currentTrade.offerA.cards;
+        tradeStatusDiv.textContent = currentTrade.acceptedB ? 'You accepted' : '';
+        if (currentTrade.acceptedA) tradeStatusDiv.textContent += ' | Opponent accepted';
+    }
+}
+
