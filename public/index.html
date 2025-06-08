@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Board Game Dice Roller</title>
+    <title>Larry &amp; Barney's Monopoly</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Simple Multiplayer Dice Game</h1>
+    <h1>Larry &amp; Barney's Monopoly</h1>
     <div id="join">
         <input id="name" placeholder="Your name" />
         <button id="joinBtn">Join Game</button>
@@ -21,6 +21,11 @@
                 <button id="payJailBtn" disabled>Pay Bail</button>
                 <button id="useCardBtn" disabled>Use Card</button>
                 <button id="endTurnBtn" disabled>End Turn</button>
+                <div id="chat">
+                    <div id="chatMessages"></div>
+                    <input id="chatInput" placeholder="Say something" />
+                    <button id="chatSend">Send</button>
+                </div>
             </div>
             <div id="boardWrapper">
                 <div id="board">
@@ -57,7 +62,6 @@
                     </div>
                 </div>
                 <div id="tradeStatus" style="margin-top:5px;"></div>
-                <button id="tradeUpdateBtn">Update</button>
                 <button id="tradeAcceptBtn">Accept</button>
                 <button id="tradeCancelBtn">Cancel</button>
             </div>

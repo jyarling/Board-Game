@@ -5,6 +5,6 @@ describe('GET /', () => {
   it('serves the index page', async () => {
     const res = await request(app).get('/');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('Board Game Dice Roller');
+    expect(res.text).toContain("Larry &amp; Barney's Monopoly");
   });
 });

@@ -1,4 +1,4 @@
-# Board Game Example
+# Larry & Barney's Monopoly
 
 This project contains a minimal Node.js application that lets multiple players
 connect via their browsers and take turns rolling dice using WebSockets.

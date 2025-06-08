@@ -98,7 +98,7 @@ let propertyMortgaged = Array(BOARD_SIZE).fill(false);
 let propertyHouses = Array(BOARD_SIZE).fill(0); // 0-4 houses, 5=hotel
 let players = [];
 let currentTurn = 0;
-const TURN_TIMEOUT_MS = 20000;
+const TURN_TIMEOUT_MS = 30000;
 let turnTimer = null;
 const COLORS = ['red', 'blue', 'green', 'yellow'];
 let trades = [];
@@ -118,7 +118,12 @@ function eliminatePlayer(idx) {
   propertyHouses = propertyHouses.map((h, i) => (propertyOwners[i] === null ? 0 : h));
   propertyOwners = propertyOwners.map(o => (o !== null && o > idx ? o - 1 : o));
   log(`${out.name} was eliminated from the game.`);
+  io.to(out.id).emit('spectator');
   io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+
+  if (players.length === 1) {
+    log(`${players[0].name} wins the game!`);
+  }
 
   if (players.length === 0) {
     currentTurn = 0;
@@ -453,15 +458,31 @@ function drawChest(idx) {
 
 function startTurnTimer() {
   clearTimeout(turnTimer);
-  turnTimer = setTimeout(() => {
+  turnTimer = setTimeout(handleTurnTimeout, TURN_TIMEOUT_MS);
+}
+
+function handleTurnTimeout() {
+  const player = players[currentTurn];
+  if (!player) return;
+  if (!player.hasRolled) {
+    const roll1 = Math.floor(Math.random() * 6) + 1;
+    const roll2 = Math.floor(Math.random() * 6) + 1;
+    const total = roll1 + roll2;
+    log(`${player.name} auto-rolled ${roll1} and ${roll2} (total ${total})`, currentTurn);
+    movePlayerRelative(currentTurn, total);
+  }
+  const pos = player.position;
+  if (!currentAuction && PROPERTY_INFO[pos].price && propertyOwners[pos] == null) {
+    startAuction(pos, endCurrentTurn);
+  } else {
     endCurrentTurn();
-  }, TURN_TIMEOUT_MS);
+  }
 }
 
 function endCurrentTurn() {
   if (players.length === 0) return;
   let idx = currentTurn;
-  if (players[idx].money < 0) {
+  if (players[idx].money <= 0) {
     eliminatePlayer(idx);
     if (players.length === 0) return;
     if (idx >= players.length) idx = 0;
@@ -505,6 +526,12 @@ io.on('connection', socket => {
     } else {
       socket.emit('notYourTurn');
     }
+  });
+
+  socket.on('chat', text => {
+    const player = players.find(p => p.id === socket.id);
+    if (!player) return;
+    io.emit('chat', `${player.name}: ${text}`);
   });
 
   socket.on('rollDice', () => {
