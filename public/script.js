@@ -5,6 +5,7 @@ const nameInput = document.getElementById('name');
 const joinBtn = document.getElementById('joinBtn');
 const rollBtn = document.getElementById('rollBtn');
 const buyBtn = document.getElementById('buyBtn');
+const endTurnBtn = document.getElementById('endTurnBtn');
 const logDiv = document.getElementById('log');
 const boardDiv = document.getElementById('board');
 const statsDiv = document.getElementById('stats');
@@ -63,6 +64,7 @@ joinBtn.onclick = () => {
 };
 
 rollBtn.onclick = () => {
+    rollBtn.disabled = true;
     socket.emit('rollDice');
 };
 
@@ -70,6 +72,10 @@ buyBtn.onclick = () => {
     const me = players.find(p => p.id === playerId);
     if (!me) return;
     socket.emit('buyProperty', me.position);
+};
+
+endTurnBtn.onclick = () => {
+    socket.emit('endTurn');
 };
 
 socket.on('joined', (id) => {
@@ -91,12 +97,14 @@ socket.on('message', msg => {
 
 socket.on('yourTurn', () => {
     rollBtn.disabled = false;
+    endTurnBtn.disabled = false;
     updateBuyButton();
 });
 
 socket.on('notYourTurn', () => {
     rollBtn.disabled = true;
     buyBtn.disabled = true;
+    endTurnBtn.disabled = true;
 });
 
 socket.on('state', state => {
