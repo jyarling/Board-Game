@@ -1,0 +1,104 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: radial-gradient(circle, #f7f7f7, #ddd);
+    margin: 0;
+    padding: 20px;
+}
+
+#layout {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+#controls, #stats {
+    width: 180px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#boardWrapper {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#board {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    grid-template-rows: repeat(11, 1fr);
+    max-width: 80vmin;
+    max-height: 80vmin;
+    background: #fafafa;
+    border: 8px solid #333;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+#log {
+    grid-column: 2 / 11;
+    grid-row: 2 / 11;
+    border: none;
+    overflow-y: scroll;
+    background: rgba(255,255,255,0.9);
+    padding: 5px;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.space {
+    border: 1px solid #999;
+    position: relative;
+    font-size: 10px;
+    background: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.property {
+    border-top: 10px solid;
+}
+
+.space .tokens {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+    margin-top: auto;
+    padding-bottom: 2px;
+}
+
+.space .buildings {
+    display: flex;
+    gap: 2px;
+}
+
+.token {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    position: absolute;
+    box-shadow: 0 0 2px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%);
+    transition: transform 0.2s linear;
+}
+
+.p0 { background: red; }
+.p1 { background: blue; }
+.p2 { background: green; }
+.p3 { background: yellow; }
+
+.owned-0 { background: rgba(255,0,0,0.2); }
+.owned-1 { background: rgba(0,0,255,0.2); }
+.owned-2 { background: rgba(0,128,0,0.2); }
+.owned-3 { background: rgba(255,255,0,0.2); }
+
+.mortgaged {
+    filter: grayscale(100%) brightness(70%);
+}
