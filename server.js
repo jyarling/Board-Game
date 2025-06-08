@@ -102,6 +102,7 @@ const TURN_TIMEOUT_MS = 20000;
 let turnTimer = null;
 const COLORS = ['red', 'blue', 'green', 'yellow'];
 let trades = [];
+let currentAuction = null;
 
 function hasMonopoly(playerIdx, group) {
   const indices = PROPERTY_INFO.map((p, i) => ({...p, index: i}))
@@ -266,6 +267,79 @@ function finalizeTrade(trade) {
 
   log(`${a.name} traded with ${b.name}.`);
   io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+}
+
+function startAuction(index, cb) {
+  if (currentAuction || PROPERTY_INFO[index].price <= 0) { if (cb) cb(); return; }
+  const price = PROPERTY_INFO[index].price;
+  const increment = Math.ceil(price * 0.1);
+  const startBid = Math.ceil(price * 0.5);
+  currentAuction = {
+    property: index,
+    increment,
+    startBid,
+    currentBid: startBid,
+    highestBidder: null,
+    timeRemaining: 5,
+    interval: null,
+    endCallback: cb
+  };
+  io.emit('auctionStarted', { index, startBid, increment, timeRemaining: 5 });
+  currentAuction.interval = setInterval(() => {
+    currentAuction.timeRemaining -= 1;
+    if (currentAuction.timeRemaining <= 0) {
+      endAuction();
+    } else {
+      io.emit('auctionUpdate', {
+        currentBid: currentAuction.currentBid,
+        highestBidder: currentAuction.highestBidder != null ? players[currentAuction.highestBidder].name : null,
+        timeRemaining: currentAuction.timeRemaining
+      });
+    }
+  }, 1000);
+}
+
+function placeBid(playerIdx) {
+  if (!currentAuction) return;
+  const bid = currentAuction.currentBid === currentAuction.startBid && currentAuction.highestBidder == null
+    ? currentAuction.startBid
+    : currentAuction.currentBid + currentAuction.increment;
+  if (players[playerIdx].money < bid) return;
+  currentAuction.currentBid = bid;
+  currentAuction.highestBidder = playerIdx;
+  currentAuction.timeRemaining = 5;
+  io.emit('auctionUpdate', {
+    currentBid: currentAuction.currentBid,
+    highestBidder: players[playerIdx].name,
+    timeRemaining: currentAuction.timeRemaining
+  });
+}
+
+function endAuction() {
+  if (!currentAuction) return;
+  clearInterval(currentAuction.interval);
+  let winner = null;
+  if (currentAuction.highestBidder != null) {
+    const idx = currentAuction.highestBidder;
+    winner = players[idx];
+    winner.money -= currentAuction.currentBid;
+    winner.properties.push(currentAuction.property);
+    propertyOwners[currentAuction.property] = idx;
+    propertyMortgaged[currentAuction.property] = false;
+    propertyHouses[currentAuction.property] = 0;
+    log(`${winner.name} won the auction for ${SPACE_NAMES[currentAuction.property]} at $${currentAuction.currentBid}.`, idx);
+  } else {
+    log(`No one bid on ${SPACE_NAMES[currentAuction.property]}.`);
+  }
+  io.emit('auctionEnded', {
+    winner: winner ? winner.name : null,
+    finalBid: currentAuction.currentBid,
+    property: currentAuction.property
+  });
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+  const cb = currentAuction.endCallback;
+  currentAuction = null;
+  if (cb) cb();
 }
 
 function movePlayer(idx, target, passGo = false) {
@@ -634,13 +708,24 @@ io.on('connection', socket => {
     io.to(players[trade.playerB].id).emit('tradeEnded');
   });
 
+  socket.on('placeBid', () => {
+    const idx = players.findIndex(p => p.id === socket.id);
+    if (idx === -1) return;
+    placeBid(idx);
+  });
+
   socket.on('endTurn', () => {
     const player = players[currentTurn];
     if (!player || player.id !== socket.id) {
       socket.emit('notYourTurn');
       return;
     }
-    endCurrentTurn();
+    const pos = player.position;
+    if (!currentAuction && PROPERTY_INFO[pos].price && propertyOwners[pos] == null) {
+      startAuction(pos, endCurrentTurn);
+    } else {
+      endCurrentTurn();
+    }
   });
 
   socket.on('disconnect', () => {

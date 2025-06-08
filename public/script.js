@@ -29,7 +29,15 @@ const tradeUpdateBtn = document.getElementById('tradeUpdateBtn');
 const tradeAcceptBtn = document.getElementById('tradeAcceptBtn');
 const tradeCancelBtn = document.getElementById('tradeCancelBtn');
 const tradeStatusDiv = document.getElementById('tradeStatus');
+const auctionModal = document.getElementById('auctionModal');
+const auctionTitle = document.getElementById('auctionTitle');
+const auctionBidSpan = document.getElementById('auctionBid');
+const auctionBidderSpan = document.getElementById('auctionBidder');
+const auctionCountdown = document.getElementById('auctionCountdown');
+const auctionBidBtn = document.getElementById('auctionBidBtn');
+const auctionCloseBtn = document.getElementById('auctionCloseBtn');
 let boardSize = 40;
+let currentAuction = null;
 const spaces = [
     {name: 'Go', color: '', price: 0},
     {name: 'Mediterranean Ave', color: '#8B4513', price: 60},
@@ -237,6 +245,43 @@ socket.on('tradeUpdated', trade => {
 socket.on('tradeEnded', () => {
     tradeModal.style.display = 'none';
     currentTrade = null;
+});
+
+auctionBidBtn.onclick = () => {
+    socket.emit('placeBid');
+};
+
+auctionCloseBtn.onclick = () => {
+    auctionModal.style.display = 'none';
+};
+
+socket.on('auctionStarted', data => {
+    currentAuction = data;
+    auctionTitle.textContent = `Auction: ${spaces[data.index].name}`;
+    auctionBidSpan.textContent = data.startBid;
+    auctionBidderSpan.textContent = '';
+    auctionCountdown.textContent = data.timeRemaining;
+    auctionBidBtn.textContent = `Bid +$${data.increment}`;
+    auctionBidBtn.disabled = false;
+    auctionCloseBtn.style.display = 'none';
+    auctionModal.style.display = 'flex';
+});
+
+socket.on('auctionUpdate', data => {
+    if (!currentAuction) return;
+    auctionBidSpan.textContent = data.currentBid;
+    auctionBidderSpan.textContent = data.highestBidder || '';
+    auctionCountdown.textContent = data.timeRemaining;
+});
+
+socket.on('auctionEnded', data => {
+    if (!currentAuction) return;
+    auctionBidSpan.textContent = data.finalBid;
+    auctionBidderSpan.textContent = data.winner || 'No bids';
+    auctionCountdown.textContent = 0;
+    auctionBidBtn.disabled = true;
+    auctionCloseBtn.style.display = 'block';
+    currentAuction = null;
 });
 
 function buildBoard() {
