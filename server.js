@@ -96,6 +96,29 @@ const SPACE_NAMES = [
 let propertyOwners = Array(BOARD_SIZE).fill(null);
 let players = [];
 let currentTurn = 0;
+const TURN_TIMEOUT_MS = 20000;
+let turnTimer = null;
+
+function startTurnTimer() {
+  clearTimeout(turnTimer);
+  turnTimer = setTimeout(() => {
+    endCurrentTurn();
+  }, TURN_TIMEOUT_MS);
+}
+
+function endCurrentTurn() {
+  if (players.length === 0) return;
+  currentTurn = (currentTurn + 1) % players.length;
+  players[currentTurn].hasRolled = false;
+  io.to(players[currentTurn].id).emit('yourTurn');
+  players.forEach(p => {
+    if (p.id !== players[currentTurn].id) {
+      io.to(p.id).emit('notYourTurn');
+    }
+  });
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+  startTurnTimer();
+}
 
 io.on('connection', socket => {
   socket.on('joinGame', name => {
@@ -103,13 +126,14 @@ io.on('connection', socket => {
       socket.emit('message', 'Game is full');
       return;
     }
-    const player = { id: socket.id, name, position: 0, money: 1500, properties: [] };
+    const player = { id: socket.id, name, position: 0, money: 1500, properties: [], hasRolled: false };
     players.push(player);
     socket.emit('joined', socket.id);
     io.emit('message', `${name} joined the game.`);
     io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
     if (players.length === 1) {
       io.to(players[0].id).emit('yourTurn');
+      startTurnTimer();
     } else {
       socket.emit('notYourTurn');
     }
@@ -121,6 +145,8 @@ io.on('connection', socket => {
       socket.emit('notYourTurn');
       return;
     }
+    if (player.hasRolled) return;
+    player.hasRolled = true;
     const roll1 = Math.floor(Math.random() * 6) + 1;
     const roll2 = Math.floor(Math.random() * 6) + 1;
     const total = roll1 + roll2;
@@ -133,17 +159,13 @@ io.on('connection', socket => {
     io.emit('message', `${player.name} rolled ${roll1} and ${roll2} (total ${total})`);
     io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
     if (roll1 === roll2) {
+      player.hasRolled = false;
       io.to(player.id).emit('yourTurn');
       players.forEach(p => { if (p.id !== player.id) io.to(p.id).emit('notYourTurn'); });
+      startTurnTimer();
       return;
     }
-    currentTurn = (currentTurn + 1) % players.length;
-    io.to(players[currentTurn].id).emit('yourTurn');
-    players.forEach(p => {
-      if (p.id !== players[currentTurn].id) {
-        io.to(p.id).emit('notYourTurn');
-      }
-    });
+    startTurnTimer();
   });
 
   socket.on('buyProperty', index => {
@@ -160,6 +182,16 @@ io.on('connection', socket => {
     propertyOwners[index] = players.indexOf(player);
     io.emit('message', `${player.name} bought ${SPACE_NAMES[index]} for $${info.price}.`);
     io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners });
+    startTurnTimer();
+  });
+
+  socket.on('endTurn', () => {
+    const player = players[currentTurn];
+    if (!player || player.id !== socket.id) {
+      socket.emit('notYourTurn');
+      return;
+    }
+    endCurrentTurn();
   });
 
   socket.on('disconnect', () => {
@@ -176,6 +208,7 @@ io.on('connection', socket => {
     if (players.length === 0) {
       currentTurn = 0;
       propertyOwners = Array(BOARD_SIZE).fill(null);
+      clearTimeout(turnTimer);
       return;
     }
 
@@ -185,12 +218,14 @@ io.on('connection', socket => {
 
     if (idx === currentTurn) {
       currentTurn = currentTurn % players.length;
+      players[currentTurn].hasRolled = false;
       io.to(players[currentTurn].id).emit('yourTurn');
       players.forEach(p => {
         if (p.id !== players[currentTurn].id) {
           io.to(p.id).emit('notYourTurn');
         }
       });
+      startTurnTimer();
     }
   });
 });
