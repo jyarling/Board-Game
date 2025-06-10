@@ -2,46 +2,46 @@ module.exports = function(io) {
 const BOARD_SIZE = 40; // spaces around the board
 const PROPERTY_INFO = [
   { price: 0 },
-  { price: 60, group: 'brown', houseCost: 50 },
+  { price: 60, group: 'brown', houseCost: 50, rentTable: [2,10,30,90,160,250] },
   { price: 0 },
-  { price: 60, group: 'brown', houseCost: 50 },
+  { price: 60, group: 'brown', houseCost: 50, rentTable: [4,20,60,180,320,450] },
   { price: 0 },
-  { price: 200 },
-  { price: 100, group: 'lightblue', houseCost: 50 },
+  { price: 200, railroad: true, rentTable: [25,50,100,200] },
+  { price: 100, group: 'lightblue', houseCost: 50, rentTable: [6,30,90,270,400,550] },
   { price: 0 },
-  { price: 100, group: 'lightblue', houseCost: 50 },
-  { price: 120, group: 'lightblue', houseCost: 50 },
+  { price: 100, group: 'lightblue', houseCost: 50, rentTable: [6,30,90,270,400,550] },
+  { price: 120, group: 'lightblue', houseCost: 50, rentTable: [8,40,100,300,450,600] },
   { price: 0 },
-  { price: 140, group: 'pink', houseCost: 100 },
-  { price: 150 },
-  { price: 140, group: 'pink', houseCost: 100 },
-  { price: 160, group: 'pink', houseCost: 100 },
-  { price: 200 },
-  { price: 180, group: 'orange', houseCost: 100 },
+  { price: 140, group: 'pink', houseCost: 100, rentTable: [10,50,150,450,625,750] },
+  { price: 150, utility: true },
+  { price: 140, group: 'pink', houseCost: 100, rentTable: [10,50,150,450,625,750] },
+  { price: 160, group: 'pink', houseCost: 100, rentTable: [12,60,180,500,700,900] },
+  { price: 200, railroad: true, rentTable: [25,50,100,200] },
+  { price: 180, group: 'orange', houseCost: 100, rentTable: [14,70,200,550,750,950] },
   { price: 0 },
-  { price: 180, group: 'orange', houseCost: 100 },
-  { price: 200, group: 'orange', houseCost: 100 },
+  { price: 180, group: 'orange', houseCost: 100, rentTable: [14,70,200,550,750,950] },
+  { price: 200, group: 'orange', houseCost: 100, rentTable: [16,80,220,600,800,1000] },
   { price: 0 },
-  { price: 220, group: 'red', houseCost: 150 },
+  { price: 220, group: 'red', houseCost: 150, rentTable: [18,90,250,700,875,1050] },
   { price: 0 },
-  { price: 220, group: 'red', houseCost: 150 },
-  { price: 240, group: 'red', houseCost: 150 },
-  { price: 200 },
-  { price: 260, group: 'yellow', houseCost: 150 },
-  { price: 260, group: 'yellow', houseCost: 150 },
-  { price: 150 },
-  { price: 280, group: 'yellow', houseCost: 150 },
+  { price: 220, group: 'red', houseCost: 150, rentTable: [18,90,250,700,875,1050] },
+  { price: 240, group: 'red', houseCost: 150, rentTable: [20,100,300,750,925,1100] },
+  { price: 200, railroad: true, rentTable: [25,50,100,200] },
+  { price: 260, group: 'yellow', houseCost: 150, rentTable: [22,110,330,800,975,1150] },
+  { price: 260, group: 'yellow', houseCost: 150, rentTable: [22,110,330,800,975,1150] },
+  { price: 150, utility: true },
+  { price: 280, group: 'yellow', houseCost: 150, rentTable: [24,120,360,850,1025,1200] },
   { price: 0 },
-  { price: 300, group: 'green', houseCost: 200 },
-  { price: 300, group: 'green', houseCost: 200 },
+  { price: 300, group: 'green', houseCost: 200, rentTable: [26,130,390,900,1100,1275] },
+  { price: 300, group: 'green', houseCost: 200, rentTable: [26,130,390,900,1100,1275] },
   { price: 0 },
-  { price: 320, group: 'green', houseCost: 200 },
-  { price: 200 },
+  { price: 320, group: 'green', houseCost: 200, rentTable: [28,150,450,1000,1200,1400] },
+  { price: 200, railroad: true, rentTable: [25,50,100,200] },
   { price: 0 },
-  { price: 350, group: 'blue', houseCost: 200 },
+  { price: 350, group: 'blue', houseCost: 200, rentTable: [35,175,500,1100,1300,1500] },
   { price: 0 },
-  { price: 400, group: 'blue', houseCost: 200 }
-].map(info => ({ ...info, rent: info.price ? Math.ceil(info.price / 10) : 0 }));
+  { price: 400, group: 'blue', houseCost: 200, rentTable: [50,200,600,1400,1700,2000] }
+];
 const SPACE_NAMES = [
   'Go',
   'Mediterranean Ave',
@@ -381,24 +381,31 @@ function chargeRent(player, index, doubleRent) {
   if (ownerIdx == null || ownerIdx === players.indexOf(player)) return;
   if (propertyMortgaged[index]) return; // no rent on mortgaged property
 
-  let rent = PROPERTY_INFO[index].rent;
-
-  // monopoly bonus
   const info = PROPERTY_INFO[index];
-  if (info.group && hasMonopoly(ownerIdx, info.group) && propertyHouses[index] === 0) {
-    rent *= 2;
+  let rent = 0;
+
+  if (info.railroad) {
+    const count = PROPERTY_INFO.reduce((c, p, i) => c + (p.railroad && propertyOwners[i] === ownerIdx ? 1 : 0), 0);
+    rent = info.rentTable[count - 1];
+    if (doubleRent) rent *= 2;
+  } else if (info.utility) {
+    const count = PROPERTY_INFO.reduce((c, p, i) => c + (p.utility && propertyOwners[i] === ownerIdx ? 1 : 0), 0);
+    const roll = player.lastRoll || (Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1);
+    const multiplier = count === 2 ? 10 : 4;
+    rent = roll * multiplier;
+  } else if (info.group) {
+    rent = info.rentTable[propertyHouses[index]];
+    if (hasMonopoly(ownerIdx, info.group) && propertyHouses[index] === 0) {
+      rent *= 2;
+    }
+    if (doubleRent) rent *= 2;
   }
 
-  // houses/hotel multiplier (simple scaling)
-  if (propertyHouses[index] > 0) {
-    rent *= (1 + propertyHouses[index]);
+  if (rent > 0) {
+    player.money -= rent;
+    players[ownerIdx].money += rent;
+    log(`${player.name} paid $${rent} rent to ${players[ownerIdx].name}.`, players.indexOf(player));
   }
-
-  if (doubleRent) rent *= 2;
-
-  player.money -= rent;
-  players[ownerIdx].money += rent;
-  log(`${player.name} paid $${rent} rent to ${players[ownerIdx].name}.`, players.indexOf(player));
 }
 
 function handleLanding(player, idx) {
@@ -505,7 +512,8 @@ io.on('connection', socket => {
       hasRolled: false,
       inJail: false,
       jailTurns: 0,
-      items: { getOutOfJail: 0 }
+      items: { getOutOfJail: 0 },
+      lastRoll: 0
     };
     players.push(player);
     socket.emit('joined', socket.id);
@@ -537,6 +545,7 @@ io.on('connection', socket => {
     const roll1 = Math.floor(Math.random() * 6) + 1;
     const roll2 = Math.floor(Math.random() * 6) + 1;
     const total = roll1 + roll2;
+    player.lastRoll = total;
     log(`${player.name} rolled ${roll1} and ${roll2} (total ${total})`, currentTurn);
 
     if (player.inJail) {
@@ -619,6 +628,9 @@ io.on('connection', socket => {
     if (!info.group || propertyOwners[index] !== playerIdx) return;
     if (!hasMonopoly(playerIdx, info.group)) return;
     if (propertyHouses[index] >= 5) return;
+    const groupIndices = PROPERTY_INFO.map((p, i) => p.group === info.group ? i : -1).filter(i => i !== -1);
+    const minHouses = Math.min(...groupIndices.map(i => propertyHouses[i]));
+    if (propertyHouses[index] > minHouses) return;
     const cost = info.houseCost;
     if (players[playerIdx].money < cost) return;
     players[playerIdx].money -= cost;
@@ -635,6 +647,9 @@ io.on('connection', socket => {
     if (propertyOwners[index] !== playerIdx) return;
     if (propertyHouses[index] <= 0) return;
     const info = PROPERTY_INFO[index];
+    const groupIndices = PROPERTY_INFO.map((p, i) => p.group === info.group ? i : -1).filter(i => i !== -1);
+    const maxHouses = Math.max(...groupIndices.map(i => propertyHouses[i]));
+    if (propertyHouses[index] < maxHouses) return;
     propertyHouses[index] -= 1;
     const value = Math.floor(info.houseCost / 2);
     players[playerIdx].money += value;
