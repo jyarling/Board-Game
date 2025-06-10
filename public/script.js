@@ -1,7 +1,12 @@
-const socket = io();
+const rootSocket = io();
+let socket;
 const joinDiv = document.getElementById('join');
 const gameDiv = document.getElementById('game');
 const nameInput = document.getElementById('name');
+const createBtn = document.getElementById('createBtn');
+const createCodeInput = document.getElementById('createCode');
+const lobbyNameInput = document.getElementById('lobbyName');
+const joinCodeInput = document.getElementById('joinCode');
 const joinBtn = document.getElementById('joinBtn');
 const rollBtn = document.getElementById('rollBtn');
 const buyBtn = document.getElementById('buyBtn');
@@ -93,10 +98,29 @@ let currentTrade = null;
 let lastPositions = {};
 let tokenElems = {};
 
+function startGame(code, name) {
+    socket = io(`/game-${code}`);
+    registerGameEvents(socket);
+    socket.emit('joinGame', name);
+}
+
+createBtn.onclick = () => {
+    const name = nameInput.value.trim();
+    const code = createCodeInput.value.trim();
+    const lobbyName = lobbyNameInput.value.trim();
+    if (!name || !code) return;
+    rootSocket.emit('createLobby', { code, name: lobbyName });
+    rootSocket.once('lobbyCreated', c => startGame(c, name));
+    rootSocket.once('lobbyError', msg => alert(msg));
+};
+
 joinBtn.onclick = () => {
     const name = nameInput.value.trim();
-    if (!name) return;
-    socket.emit('joinGame', name);
+    const code = joinCodeInput.value.trim();
+    if (!name || !code) return;
+    rootSocket.emit('joinLobby', code);
+    rootSocket.once('lobbyJoined', c => startGame(c, name));
+    rootSocket.once('lobbyError', msg => alert(msg));
 };
 
 rollBtn.onclick = () => {
@@ -173,6 +197,14 @@ useCardBtn.onclick = () => {
     socket.emit('useJailCard');
 };
 
+auctionBidBtn.onclick = () => {
+    socket.emit('placeBid');
+};
+
+auctionCloseBtn.onclick = () => {
+    auctionModal.style.display = 'none';
+};
+
 chatSend.onclick = () => {
     const txt = chatInput.value.trim();
     if (txt) {
@@ -185,124 +217,118 @@ chatInput.addEventListener('keyup', e => {
     if (e.key === 'Enter') chatSend.click();
 });
 
-socket.on('joined', (id) => {
-    playerId = id;
-    joinDiv.style.display = 'none';
-    gameDiv.style.display = 'block';
-    if (boardCoords.length === 0) {
-        buildBoard();
-        renderOwnership();
-    }
-});
+function registerGameEvents(s) {
+    s.on('joined', id => {
+        playerId = id;
+        joinDiv.style.display = 'none';
+        gameDiv.style.display = 'block';
+        if (boardCoords.length === 0) {
+            buildBoard();
+            renderOwnership();
+        }
+    });
 
-socket.on('message', msg => {
-    const p = document.createElement('p');
-    if (typeof msg === 'object') {
-        p.textContent = msg.text;
-        if (msg.color) p.style.color = msg.color;
-    } else {
+    s.on('message', msg => {
+        const p = document.createElement('p');
+        if (typeof msg === 'object') {
+            p.textContent = msg.text;
+            if (msg.color) p.style.color = msg.color;
+        } else {
+            p.textContent = msg;
+        }
+        logDiv.appendChild(p);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    });
+
+    s.on('chat', msg => {
+        const p = document.createElement('div');
         p.textContent = msg;
-    }
-    logDiv.appendChild(p);
-    logDiv.scrollTop = logDiv.scrollHeight;
-});
+        chatMessages.appendChild(p);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
 
-socket.on('chat', msg => {
-    const p = document.createElement('div');
-    p.textContent = msg;
-    chatMessages.appendChild(p);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-});
+    s.on('yourTurn', () => {
+        rollBtn.disabled = false;
+        endTurnBtn.disabled = false;
+        tradeBtn.disabled = false;
+        updateJailButtons();
+        updateBuyButton();
+    });
 
-socket.on('yourTurn', () => {
-    rollBtn.disabled = false;
-    endTurnBtn.disabled = false;
-    tradeBtn.disabled = false;
-    updateJailButtons();
-    updateBuyButton();
-});
+    s.on('notYourTurn', () => {
+        rollBtn.disabled = true;
+        buyBtn.disabled = true;
+        payJailBtn.disabled = true;
+        useCardBtn.disabled = true;
+        endTurnBtn.disabled = true;
+        tradeBtn.disabled = true;
+    });
 
-socket.on('notYourTurn', () => {
-    rollBtn.disabled = true;
-    buyBtn.disabled = true;
-    payJailBtn.disabled = true;
-    useCardBtn.disabled = true;
-    endTurnBtn.disabled = true;
-    tradeBtn.disabled = true;
-});
+    s.on('state', state => {
+        boardSize = state.boardSize;
+        players = state.players;
+        propertyOwners = state.propertyOwners || [];
+        propertyMortgaged = state.propertyMortgaged || [];
+        propertyHouses = state.propertyHouses || [];
+        if (boardCoords.length === 0) {
+            buildBoard();
+        }
+        renderTokens();
+        renderOwnership();
+        renderStats();
+        updateJailButtons();
+        updateBuyButton();
+    });
 
-socket.on('state', state => {
-    boardSize = state.boardSize;
-    players = state.players;
-    propertyOwners = state.propertyOwners || [];
-    propertyMortgaged = state.propertyMortgaged || [];
-    propertyHouses = state.propertyHouses || [];
-    if (boardCoords.length === 0) {
-        buildBoard();
-    }
-    renderTokens();
-    renderOwnership();
-    renderStats();
-    updateJailButtons();
-    updateBuyButton();
-});
+    s.on('tradeStarted', trade => {
+        currentTrade = trade;
+        tradeStartDiv.style.display = 'none';
+        tradeWindowDiv.style.display = 'block';
+        tradeModal.style.display = 'flex';
+        populateTradeWindow();
+    });
 
-socket.on('tradeStarted', trade => {
-    currentTrade = trade;
-    tradeStartDiv.style.display = 'none';
-    tradeWindowDiv.style.display = 'block';
-    tradeModal.style.display = 'flex';
-    populateTradeWindow();
-});
+    s.on('tradeUpdated', trade => {
+        if (!currentTrade || currentTrade.id !== trade.id) return;
+        currentTrade = trade;
+        populateTradeWindow();
+    });
 
-socket.on('tradeUpdated', trade => {
-    if (!currentTrade || currentTrade.id !== trade.id) return;
-    currentTrade = trade;
-    populateTradeWindow();
-});
+    s.on('tradeEnded', () => {
+        tradeModal.style.display = 'none';
+        currentTrade = null;
+    });
 
-socket.on('tradeEnded', () => {
-    tradeModal.style.display = 'none';
-    currentTrade = null;
-});
+    s.on('auctionStarted', data => {
+        currentAuction = data;
+        auctionTitle.textContent = `Auction: ${spaces[data.index].name}`;
+        auctionBidSpan.textContent = data.startBid;
+        auctionBidderSpan.textContent = '';
+        auctionCountdown.textContent = data.timeRemaining;
+        auctionBidBtn.textContent = `Bid +$${data.increment}`;
+        auctionBidBtn.disabled = false;
+        auctionCloseBtn.style.display = 'none';
+        auctionModal.style.display = 'flex';
+    });
 
-auctionBidBtn.onclick = () => {
-    socket.emit('placeBid');
-};
+    s.on('auctionUpdate', data => {
+        if (!currentAuction) return;
+        auctionBidSpan.textContent = data.currentBid;
+        auctionBidderSpan.textContent = data.highestBidder || '';
+        auctionCountdown.textContent = data.timeRemaining;
+    });
 
-auctionCloseBtn.onclick = () => {
-    auctionModal.style.display = 'none';
-};
-
-socket.on('auctionStarted', data => {
-    currentAuction = data;
-    auctionTitle.textContent = `Auction: ${spaces[data.index].name}`;
-    auctionBidSpan.textContent = data.startBid;
-    auctionBidderSpan.textContent = '';
-    auctionCountdown.textContent = data.timeRemaining;
-    auctionBidBtn.textContent = `Bid +$${data.increment}`;
-    auctionBidBtn.disabled = false;
-    auctionCloseBtn.style.display = 'none';
-    auctionModal.style.display = 'flex';
-});
-
-socket.on('auctionUpdate', data => {
-    if (!currentAuction) return;
-    auctionBidSpan.textContent = data.currentBid;
-    auctionBidderSpan.textContent = data.highestBidder || '';
-    auctionCountdown.textContent = data.timeRemaining;
-});
-
-socket.on('auctionEnded', data => {
-    if (!currentAuction) return;
-    auctionBidSpan.textContent = data.finalBid;
-    auctionBidderSpan.textContent = data.winner || 'No bids';
-    auctionCountdown.textContent = 0;
-    auctionBidBtn.disabled = true;
-    auctionCloseBtn.style.display = 'block';
-    currentAuction = null;
-    setTimeout(() => { auctionModal.style.display = 'none'; }, 2000);
-});
+    s.on('auctionEnded', data => {
+        if (!currentAuction) return;
+        auctionBidSpan.textContent = data.finalBid;
+        auctionBidderSpan.textContent = data.winner || 'No bids';
+        auctionCountdown.textContent = 0;
+        auctionBidBtn.disabled = true;
+        auctionCloseBtn.style.display = 'block';
+        currentAuction = null;
+        setTimeout(() => { auctionModal.style.display = 'none'; }, 2000);
+    });
+}
 
 function buildBoard() {
     const N = 11; // 11x11 grid => 40 spaces
