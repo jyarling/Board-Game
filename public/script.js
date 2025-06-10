@@ -327,12 +327,29 @@ function buildBoard() {
         const price = spaceData.price ? `<div>$${spaceData.price}</div>` : '';
         div.innerHTML = `<div>${spaceData.icon || ''}</div><div>${spaceData.name}</div>${price}<div class="buildings"></div><div class="tokens"></div>`;
         boardDiv.appendChild(div);
+    });
+    updateSpaceCenters();
+}
+
+function updateSpaceCenters() {
+    const boardRect = boardDiv.getBoundingClientRect();
+    boardDiv.querySelectorAll('.space').forEach(div => {
+        const idx = parseInt(div.dataset.index, 10);
         const rect = div.getBoundingClientRect();
-        const boardRect = boardDiv.getBoundingClientRect();
         spaceCenters[idx] = {
             x: rect.left - boardRect.left + rect.width / 2,
             y: rect.top - boardRect.top + rect.height / 2
         };
+    });
+
+    Object.keys(tokenElems).forEach(i => {
+        const posIdx = lastPositions[i];
+        if (posIdx == null || spaceCenters[posIdx] == null) return;
+        const token = tokenElems[i];
+        const pos = spaceCenters[posIdx];
+        token.style.transition = 'none';
+        token.style.transform = `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%)`;
+        requestAnimationFrame(() => { token.style.transition = ''; });
     });
 }
 
@@ -519,4 +536,8 @@ function populateTradeWindow() {
     theirMoneyInput.disabled = true;
     theirCardsInput.disabled = true;
 }
+
+window.addEventListener('resize', () => {
+    updateSpaceCenters();
+});
 
