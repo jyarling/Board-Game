@@ -48,48 +48,10 @@ const propertyMenu = document.getElementById('propertyMenu');
 let menuPropertyIndex = null;
 let boardSize = 40;
 let currentAuction = null;
-const spaces = [
-    {name: 'Go', color: '', price: 0},
-    {name: 'Mediterranean Ave', color: '#8B4513', price: 60},
-    {name: 'Community Chest', icon: '🎁'},
-    {name: 'Baltic Ave', color: '#8B4513', price: 60},
-    {name: 'Income Tax', icon: '💰'},
-    {name: 'Reading RR', color: '#000', price: 200},
-    {name: 'Oriental Ave', color: '#ADD8E6', price: 100},
-    {name: 'Chance', icon: '❓'},
-    {name: 'Vermont Ave', color: '#ADD8E6', price: 100},
-    {name: 'Connecticut Ave', color: '#ADD8E6', price: 120},
-    {name: 'Jail', icon: '🚓'},
-    {name: 'St. Charles Pl', color: '#FF00FF', price: 140},
-    {name: 'Electric Co', icon: '💡', price: 150},
-    {name: 'States Ave', color: '#FF00FF', price: 140},
-    {name: 'Virginia Ave', color: '#FF00FF', price: 160},
-    {name: 'Pennsylvania RR', color: '#000', price: 200},
-    {name: 'St. James Pl', color: '#FFA500', price: 180},
-    {name: 'Community Chest', icon: '🎁'},
-    {name: 'Tennessee Ave', color: '#FFA500', price: 180},
-    {name: 'New York Ave', color: '#FFA500', price: 200},
-    {name: 'Free Parking', icon: '🅿️'},
-    {name: 'Kentucky Ave', color: '#FF0000', price: 220},
-    {name: 'Chance', icon: '❓'},
-    {name: 'Indiana Ave', color: '#FF0000', price: 220},
-    {name: 'Illinois Ave', color: '#FF0000', price: 240},
-    {name: 'B&O RR', color: '#000', price: 200},
-    {name: 'Atlantic Ave', color: '#FFFF00', price: 260},
-    {name: 'Ventnor Ave', color: '#FFFF00', price: 260},
-    {name: 'Water Works', icon: '🚰', price: 150},
-    {name: 'Marvin Gardens', color: '#FFFF00', price: 280},
-    {name: 'Go To Jail', icon: '🚔'},
-    {name: 'Pacific Ave', color: '#008000', price: 300},
-    {name: 'North Carolina Ave', color: '#008000', price: 300},
-    {name: 'Community Chest', icon: '🎁'},
-    {name: 'Pennsylvania Ave', color: '#008000', price: 320},
-    {name: 'Short Line', color: '#000', price: 200},
-    {name: 'Chance', icon: '❓'},
-    {name: 'Park Place', color: '#0000FF', price: 350},
-    {name: 'Luxury Tax', icon: '💎'},
-    {name: 'Boardwalk', color: '#0000FF', price: 400}
-];
+let spaces = [];
+const boardPromise = fetch('/data/board.json')
+    .then(r => r.json())
+    .then(d => { spaces = d.spaces; });
 let boardCoords = [];
 let spaceCenters = [];
 let players = [];
@@ -102,9 +64,11 @@ let lastPositions = {};
 let tokenElems = {};
 
 function startGame(code, name) {
-    socket = io(`/game-${code}`);
-    registerGameEvents(socket);
-    socket.emit('joinGame', name);
+    boardPromise.then(() => {
+        socket = io(`/game-${code}`);
+        registerGameEvents(socket);
+        socket.emit('joinGame', name);
+    });
 }
 
 createBtn.onclick = () => {
