@@ -166,13 +166,13 @@ function initDecks() {
     { text: 'Advance to Go (Collect $200)', action: i => movePlayer(i, 0, true) },
     { text: 'Advance to Illinois Ave', action: i => movePlayer(i, 24) },
     { text: 'Advance to St. Charles Place', action: i => movePlayer(i, 11) },
-    { text: 'Advance token to nearest Utility', action: i => moveToNearest(i, [12,28], false) },
+    { text: 'Advance token to nearest Utility', action: i => advanceToNearestUtility(i) },
     { text: 'Advance token to nearest Railroad', action: i => moveToNearest(i, [5,15,25,35], true) },
     { text: 'Bank pays you dividend of $50', action: i => changeMoney(i, 50) },
     { text: 'Get Out of Jail Free', action: i => { players[i].items.getOutOfJail++; } },
     { text: 'Go Back 3 Spaces', action: i => movePlayerRelative(i, -3) },
     { text: 'Go to Jail', action: i => sendToJail(players[i]) },
-    { text: 'Make general repairs on all your property', action: i => {} },
+    { text: 'Make general repairs on all your property', action: i => payRepairs(i, 25, 100) },
     { text: 'Pay poor tax of $15', action: i => changeMoney(i, -15) },
     { text: 'Take a trip to Reading Railroad', action: i => movePlayer(i, 5, true) },
     { text: 'Take a walk on the Boardwalk', action: i => movePlayer(i, 39) },
@@ -195,7 +195,7 @@ function initDecks() {
     { text: 'Pay hospital fees of $100', action: i => changeMoney(i, -100) },
     { text: 'Pay school fees of $150', action: i => changeMoney(i, -150) },
     { text: 'Receive $25 consultancy fee', action: i => changeMoney(i, 25) },
-    { text: 'You are assessed for street repairs – $40 per house', action: i => {} },
+    { text: 'You are assessed for street repairs – $40 per house', action: i => payRepairs(i, 40, 115) },
     { text: 'You have won second prize in a beauty contest – Collect $10', action: i => changeMoney(i, 10) },
     { text: 'You inherit $100', action: i => changeMoney(i, 100) },
   ]);
@@ -229,6 +229,60 @@ function collectFromAll(idx, amount) {
     }
   });
   log(`${players[idx].name} collected $${amount} from every player.`, idx);
+}
+
+function payRepairs(idx, houseCost, hotelCost) {
+  let cost = 0;
+  players[idx].properties.forEach(i => {
+    const houses = propertyHouses[i];
+    if (houses === 5) {
+      cost += hotelCost;
+    } else {
+      cost += houses * houseCost;
+    }
+  });
+  if (cost > 0) changeMoney(idx, -cost);
+}
+
+function advanceToNearestUtility(idx) {
+  const player = players[idx];
+  if (!player) return;
+  const utilities = [12, 28];
+  const pos = player.position;
+  let next = utilities.find(u => u > pos);
+  if (next === undefined) next = utilities[0];
+  const passGo = next < pos;
+  player.position = next;
+  if (passGo) {
+    player.money += 200;
+    log(`${player.name} passed Go and collected $200.`, idx);
+  }
+  const name = SPACE_NAMES[next];
+  log(`${player.name} moved to ${name}.`, idx);
+  const ownerIdx = propertyOwners[next];
+  if (ownerIdx != null && ownerIdx !== idx && !propertyMortgaged[next]) {
+    const roll1 = Math.floor(Math.random() * 6) + 1;
+    const roll2 = Math.floor(Math.random() * 6) + 1;
+    const total = roll1 + roll2;
+    const rent = total * 10;
+    player.money -= rent;
+    players[ownerIdx].money += rent;
+    log(`${player.name} rolled ${roll1} and ${roll2} (total ${total}) and paid $${rent} rent to ${players[ownerIdx].name}.`, idx);
+  }
+  io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
+}
+
+function calculateIncomeTax(idx) {
+  const player = players[idx];
+  if (!player) return 0;
+  let worth = player.money;
+  player.properties.forEach(i => {
+    if (!propertyMortgaged[i]) {
+      worth += PROPERTY_INFO[i].price / 2;
+    }
+  });
+  const percent = Math.floor(worth * 0.15);
+  return percent < 200 ? percent : 200;
 }
 
 function finalizeTrade(trade) {
@@ -432,7 +486,10 @@ function handleLanding(player, idx) {
     chargeRent(player, pos);
   }
 
-  if (pos === 4) changeMoney(idx, -200); // income tax
+  if (pos === 4) {
+    const tax = calculateIncomeTax(idx);
+    changeMoney(idx, -tax);
+  }
   if (pos === 38) changeMoney(idx, -100); // luxury tax
 
   io.emit('state', { players, boardSize: BOARD_SIZE, propertyOwners, propertyMortgaged, propertyHouses });
