@@ -1,3 +1,4 @@
+/* global io */
 const rootSocket = io();
 let socket;
 const joinDiv = document.getElementById('join');
