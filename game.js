@@ -1,4 +1,10 @@
 module.exports = function(io, events) {
+  function maybeCleanup() {
+    if (players.length === 0 && io.sockets.size === 0 && events) {
+      const code = io.name.replace(/^\/game-/, '');
+      events.emit('cleanup', code);
+    }
+  }
 const BOARD_SIZE = 40; // spaces around the board
 const PROPERTY_INFO = [
   { price: 0 },
@@ -122,8 +128,7 @@ function eliminatePlayer(idx) {
     propertyMortgaged = Array(BOARD_SIZE).fill(false);
     propertyHouses = Array(BOARD_SIZE).fill(0);
     clearTimeout(turnTimer);
-    const code = io.name.replace(/^\/game-/, '');
-    if (events) events.emit('cleanup', code);
+    maybeCleanup();
     return;
   }
 
@@ -839,8 +844,7 @@ io.on('connection', socket => {
       propertyMortgaged = Array(BOARD_SIZE).fill(false);
       propertyHouses = Array(BOARD_SIZE).fill(0);
       clearTimeout(turnTimer);
-      const code = io.name.replace(/^\/game-/, '');
-      if (events) events.emit('cleanup', code);
+      maybeCleanup();
       return;
     }
 
@@ -859,6 +863,7 @@ io.on('connection', socket => {
       });
       startTurnTimer();
     }
+    maybeCleanup();
   });
 });
 };
