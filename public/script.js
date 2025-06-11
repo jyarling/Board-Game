@@ -16,6 +16,7 @@ const payJailBtn = document.getElementById('payJailBtn');
 const useCardBtn = document.getElementById('useCardBtn');
 const logDiv = document.getElementById('log');
 const boardDiv = document.getElementById('board');
+const boardWrapper = document.getElementById('boardWrapper');
 const tokenLayer = document.getElementById('tokenLayer');
 const statsDiv = document.getElementById('stats');
 const tradeModal = document.getElementById('tradeModal');
@@ -43,6 +44,8 @@ const auctionCloseBtn = document.getElementById('auctionCloseBtn');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
+const propertyMenu = document.getElementById('propertyMenu');
+let menuPropertyIndex = null;
 let boardSize = 40;
 let currentAuction = null;
 const spaces = [
@@ -352,6 +355,11 @@ function buildBoard() {
         div.style.gridColumnStart = pos.col + 1;
         const price = spaceData.price ? `<div>$${spaceData.price}</div>` : '';
         div.innerHTML = `<div>${spaceData.icon || ''}</div><div>${spaceData.name}</div>${price}<div class="buildings"></div><div class="tokens"></div>`;
+        div.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            const rect = boardWrapper.getBoundingClientRect();
+            showPropertyMenu(idx, e.clientX - rect.left, e.clientY - rect.top);
+        });
         boardDiv.appendChild(div);
     });
     updateSpaceCenters();
@@ -513,6 +521,40 @@ statsDiv.addEventListener('click', e => {
     if (act === 'sellHouse') socket.emit('sellHouse', idx);
 });
 
+function showPropertyMenu(idx, x, y) {
+    hidePropertyMenu();
+    const myIdx = players.findIndex(p => p.id === playerId);
+    if (myIdx === -1 || propertyOwners[idx] !== myIdx) return;
+    menuPropertyIndex = idx;
+    const mortgaged = propertyMortgaged[idx];
+    const houses = propertyHouses[idx] || 0;
+    let html = `<button data-act="mortgage">${mortgaged ? 'Unmortgage' : 'Mortgage'}</button>`;
+    if (!mortgaged && houses < 5) html += `<button data-act="buyHouse">Buy House</button>`;
+    if (houses > 0) html += `<button data-act="sellHouse">Sell House</button>`;
+    propertyMenu.innerHTML = html;
+    propertyMenu.style.left = `${x}px`;
+    propertyMenu.style.top = `${y}px`;
+    propertyMenu.style.display = 'block';
+}
+
+function hidePropertyMenu() {
+    propertyMenu.style.display = 'none';
+    menuPropertyIndex = null;
+}
+
+propertyMenu.addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON' || menuPropertyIndex == null) return;
+    const act = e.target.dataset.act;
+    if (act === 'mortgage') socket.emit('mortgageProperty', menuPropertyIndex);
+    if (act === 'buyHouse') socket.emit('buyHouse', menuPropertyIndex);
+    if (act === 'sellHouse') socket.emit('sellHouse', menuPropertyIndex);
+    hidePropertyMenu();
+});
+
+document.addEventListener('mousedown', e => {
+    if (!propertyMenu.contains(e.target)) hidePropertyMenu();
+});
+
 function populateTradeWindow() {
     if (!currentTrade) return;
     const myIdx = players.findIndex(p => p.id === playerId);
@@ -565,5 +607,17 @@ function populateTradeWindow() {
 
 window.addEventListener('resize', () => {
     updateSpaceCenters();
+    hidePropertyMenu();
+});
+
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    if (!rollBtn.disabled) {
+        rollBtn.click();
+    } else if (!endTurnBtn.disabled) {
+        endTurnBtn.click();
+    }
 });
 
