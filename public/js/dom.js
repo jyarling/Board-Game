@@ -14,6 +14,7 @@ export const tradeBtn = document.getElementById('tradeBtn');
 export const endTurnBtn = document.getElementById('endTurnBtn');
 export const payJailBtn = document.getElementById('payJailBtn');
 export const useCardBtn = document.getElementById('useCardBtn');
+export const turnIndicator = document.getElementById('turnIndicator');
 export const logDiv = document.getElementById('log');
 export const boardDiv = document.getElementById('board');
 export const boardWrapper = document.getElementById('boardWrapper');

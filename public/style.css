@@ -153,3 +153,20 @@ body {
 #propertyMenu button:hover {
     background: #eee;
 }
+
+#turnIndicator {
+    margin-top: 10px;
+    font-weight: bold;
+    text-align: center;
+}
+
+#turnIndicator.active {
+    color: #fff;
+    background: #4caf50;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.active-token {
+    outline: 3px solid gold;
+}

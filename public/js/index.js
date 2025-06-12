@@ -1,7 +1,7 @@
 import * as DOM from './dom.js';
 import { setSocket } from './dom.js';
 import { registerGameEvents } from './socketHandlers.js';
-const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu } = DOM;
+const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator } = DOM;
 let { socket } = DOM;
 let menuPropertyIndex = null;
 let boardSize = 40;
@@ -21,12 +21,26 @@ let currentTrade = null;
 let lastPositions = {};
 let tokenElems = {};
 
+function highlightMyToken() {
+    const idx = players.findIndex(p => p.id === playerId);
+    const token = tokenElems[idx];
+    if (token) token.classList.add('active-token');
+}
+
+function unhighlightMyToken() {
+    const idx = players.findIndex(p => p.id === playerId);
+    const token = tokenElems[idx];
+    if (token) token.classList.remove('active-token');
+}
+
 function startGame(code, name) {
     boardPromise.then(() => {
         const s = io(`/game-${code}`);
         setSocket(s);
         socket = s;
         registerGameEvents(socket);
+        socket.on('yourTurn', highlightMyToken);
+        socket.on('notYourTurn', unhighlightMyToken);
         socket.emit('joinGame', name);
     });
 }
