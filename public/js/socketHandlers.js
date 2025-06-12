@@ -1,3 +1,5 @@
+import { turnIndicator } from './dom.js';
+
 export function registerGameEvents(s) {
     s.on('joined', id => {
         playerId = id;
@@ -34,6 +36,10 @@ export function registerGameEvents(s) {
         tradeBtn.disabled = false;
         updateJailButtons();
         updateBuyButton();
+        if (turnIndicator) {
+            turnIndicator.textContent = 'Your Turn!';
+            turnIndicator.classList.add('active');
+        }
     });
 
     s.on('notYourTurn', () => {
@@ -43,6 +49,10 @@ export function registerGameEvents(s) {
         useCardBtn.disabled = true;
         endTurnBtn.disabled = true;
         tradeBtn.disabled = true;
+        if (turnIndicator) {
+            turnIndicator.textContent = 'Waiting...';
+            turnIndicator.classList.remove('active');
+        }
     });
 
     s.on('state', state => {
