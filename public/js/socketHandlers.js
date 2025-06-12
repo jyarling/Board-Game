@@ -119,3 +119,6 @@ export function registerGameEvents(s) {
         currentAuction = null;
         setTimeout(() => { auctionModal.style.display = 'none'; }, 2000);
     });
+
+    // end of registerGameEvents
+}
