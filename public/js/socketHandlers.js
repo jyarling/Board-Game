@@ -1,8 +1,50 @@
-import { turnIndicator } from './dom.js';
+import {
+    turnIndicator,
+    joinDiv,
+    gameDiv,
+    logDiv,
+    chatMessages,
+    rollBtn,
+    buyBtn,
+    tradeBtn,
+    endTurnBtn,
+    payJailBtn,
+    useCardBtn,
+    tradeStartDiv,
+    tradeWindowDiv,
+    tradeModal,
+    auctionTitle,
+    auctionBidSpan,
+    auctionBidderSpan,
+    auctionCountdown,
+    auctionBidBtn,
+    auctionCloseBtn,
+    auctionModal
+} from './dom.js';
+
+import {
+    boardCoords,
+    spaces,
+    buildBoard,
+    renderTokens,
+    renderOwnership,
+    renderStats,
+    updateJailButtons,
+    updateBuyButton,
+    populateTradeWindow,
+    currentTrade,
+    currentAuction,
+    setPlayerId,
+    applyState,
+    setCurrentTrade,
+    clearCurrentTrade,
+    setCurrentAuction,
+    clearCurrentAuction
+} from './index.js';
 
 export function registerGameEvents(s) {
     s.on('joined', id => {
-        playerId = id;
+        setPlayerId(id);
         joinDiv.style.display = 'none';
         gameDiv.style.display = 'block';
         if (boardCoords.length === 0) {
@@ -56,11 +98,7 @@ export function registerGameEvents(s) {
     });
 
     s.on('state', state => {
-        boardSize = state.boardSize;
-        players = state.players;
-        propertyOwners = state.propertyOwners || [];
-        propertyMortgaged = state.propertyMortgaged || [];
-        propertyHouses = state.propertyHouses || [];
+        applyState(state);
         if (boardCoords.length === 0) {
             buildBoard();
         }
@@ -72,7 +110,7 @@ export function registerGameEvents(s) {
     });
 
     s.on('tradeStarted', trade => {
-        currentTrade = trade;
+        setCurrentTrade(trade);
         tradeStartDiv.style.display = 'none';
         tradeWindowDiv.style.display = 'block';
         tradeModal.style.display = 'flex';
@@ -81,17 +119,17 @@ export function registerGameEvents(s) {
 
     s.on('tradeUpdated', trade => {
         if (!currentTrade || currentTrade.id !== trade.id) return;
-        currentTrade = trade;
+        setCurrentTrade(trade);
         populateTradeWindow();
     });
 
     s.on('tradeEnded', () => {
         tradeModal.style.display = 'none';
-        currentTrade = null;
+        clearCurrentTrade();
     });
 
     s.on('auctionStarted', data => {
-        currentAuction = data;
+        setCurrentAuction(data);
         auctionTitle.textContent = `Auction: ${spaces[data.index].name}`;
         auctionBidSpan.textContent = data.startBid;
         auctionBidderSpan.textContent = '';
@@ -116,7 +154,7 @@ export function registerGameEvents(s) {
         auctionCountdown.textContent = 0;
         auctionBidBtn.disabled = true;
         auctionCloseBtn.style.display = 'block';
-        currentAuction = null;
+        clearCurrentAuction();
         setTimeout(() => { auctionModal.style.display = 'none'; }, 2000);
     });
 

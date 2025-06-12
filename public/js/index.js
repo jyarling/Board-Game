@@ -4,22 +4,22 @@ import { registerGameEvents } from './socketHandlers.js';
 const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator } = DOM;
 let { socket } = DOM;
 let menuPropertyIndex = null;
-let boardSize = 40;
-let currentAuction = null;
-let spaces = [];
+export let boardSize = 40;
+export let currentAuction = null;
+export let spaces = [];
 const boardPromise = fetch('/data/board.json')
     .then(r => r.json())
     .then(d => { spaces = d.spaces; });
-let boardCoords = [];
-let spaceCenters = [];
-let players = [];
-let propertyOwners = [];
-let propertyMortgaged = [];
-let propertyHouses = [];
-let playerId = null;
-let currentTrade = null;
-let lastPositions = {};
-let tokenElems = {};
+export let boardCoords = [];
+export let spaceCenters = [];
+export let players = [];
+export let propertyOwners = [];
+export let propertyMortgaged = [];
+export let propertyHouses = [];
+export let playerId = null;
+export let currentTrade = null;
+export let lastPositions = {};
+export let tokenElems = {};
 
 function highlightMyToken() {
     const idx = players.findIndex(p => p.id === playerId);
@@ -177,7 +177,7 @@ chatInput.addEventListener('keyup', e => {
 });
 
 
-function buildBoard() {
+export function buildBoard() {
     const N = 11; // 11x11 grid => 40 spaces
     boardCoords = [];
     spaceCenters = [];
@@ -209,7 +209,7 @@ function buildBoard() {
     updateSpaceCenters();
 }
 
-function updateSpaceCenters() {
+export function updateSpaceCenters() {
     const boardRect = boardDiv.getBoundingClientRect();
     boardDiv.querySelectorAll('.space').forEach(div => {
         const idx = parseInt(div.dataset.index, 10);
@@ -259,7 +259,7 @@ function animateTokenMove(token, idx, from, to) {
     step();
 }
 
-function renderTokens() {
+export function renderTokens() {
     Object.keys(tokenElems).forEach(i => {
         if (!players[i]) {
             tokenElems[i].remove();
@@ -282,7 +282,7 @@ function renderTokens() {
     });
 }
 
-function renderOwnership() {
+export function renderOwnership() {
     document.querySelectorAll('.space').forEach(div => {
         div.classList.remove('owned-0', 'owned-1', 'owned-2', 'owned-3', 'mortgaged');
         const b = div.querySelector('.buildings');
@@ -303,7 +303,7 @@ function renderOwnership() {
     });
 }
 
-function renderStats() {
+export function renderStats() {
     statsDiv.innerHTML = '';
     players.forEach((p, idx) => {
         const div = document.createElement('div');
@@ -333,7 +333,7 @@ function getTokenColor(idx) {
     return colors[idx] || 'black';
 }
 
-function updateBuyButton() {
+export function updateBuyButton() {
     const me = players.find(p => p.id === playerId);
     if (!me) { buyBtn.disabled = true; return; }
     const pos = me.position;
@@ -345,7 +345,7 @@ function updateBuyButton() {
     }
 }
 
-function updateJailButtons() {
+export function updateJailButtons() {
     const me = players.find(p => p.id === playerId);
     if (!me || !me.inJail) {
         payJailBtn.disabled = true;
@@ -399,7 +399,7 @@ document.addEventListener('mousedown', e => {
     if (!propertyMenu.contains(e.target)) hidePropertyMenu();
 });
 
-function populateTradeWindow() {
+export function populateTradeWindow() {
     if (!currentTrade) return;
     const myIdx = players.findIndex(p => p.id === playerId);
     const otherIdx = currentTrade.playerA === myIdx ? currentTrade.playerB : currentTrade.playerA;
@@ -465,3 +465,31 @@ document.addEventListener('keydown', e => {
     }
 });
 
+
+export function setPlayerId(id) {
+    playerId = id;
+}
+
+export function applyState(state) {
+    boardSize = state.boardSize;
+    players = state.players;
+    propertyOwners = state.propertyOwners || [];
+    propertyMortgaged = state.propertyMortgaged || [];
+    propertyHouses = state.propertyHouses || [];
+}
+
+export function setCurrentTrade(trade) {
+    currentTrade = trade;
+}
+
+export function clearCurrentTrade() {
+    currentTrade = null;
+}
+
+export function setCurrentAuction(data) {
+    currentAuction = data;
+}
+
+export function clearCurrentAuction() {
+    currentAuction = null;
+}
