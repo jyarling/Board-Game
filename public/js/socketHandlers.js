@@ -39,7 +39,9 @@ import {
     setCurrentTrade,
     clearCurrentTrade,
     setCurrentAuction,
-    clearCurrentAuction
+    clearCurrentAuction,
+    animateDiceRoll,
+    showNotification
 } from './index.js';
 
 export function registerGameEvents(s) {
@@ -55,18 +57,31 @@ export function registerGameEvents(s) {
 
     s.on('message', msg => {
         const p = document.createElement('p');
+        let text = '';
         if (typeof msg === 'object') {
-            p.textContent = msg.text;
+            text = msg.text;
+            p.textContent = text;
             if (msg.color) p.style.color = msg.color;
         } else {
-            p.textContent = msg;
+            text = msg;
+            p.textContent = text;
         }
+        
+        // Check if this is a dice roll message and animate dice
+        const rollMatch = text.match(/rolled (\d+) and (\d+)/);
+        if (rollMatch) {
+            const die1 = parseInt(rollMatch[1]);
+            const die2 = parseInt(rollMatch[2]);
+            animateDiceRoll(die1, die2);
+        }
+        
         logDiv.appendChild(p);
         logDiv.scrollTop = logDiv.scrollHeight;
     });
 
     s.on('chat', msg => {
         const p = document.createElement('div');
+        p.className = 'chat-message';
         p.textContent = msg;
         chatMessages.appendChild(p);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -82,6 +97,7 @@ export function registerGameEvents(s) {
             turnIndicator.textContent = 'Your Turn!';
             turnIndicator.classList.add('active');
         }
+        showNotification('It\'s your turn! 🎲', 'info', 3000);
     });
 
     s.on('notYourTurn', () => {
@@ -115,6 +131,7 @@ export function registerGameEvents(s) {
         tradeWindowDiv.style.display = 'block';
         tradeModal.style.display = 'flex';
         populateTradeWindow();
+        showNotification('Trade started! 🤝', 'info', 3000);
     });
 
     s.on('tradeUpdated', trade => {
@@ -126,6 +143,7 @@ export function registerGameEvents(s) {
     s.on('tradeEnded', () => {
         tradeModal.style.display = 'none';
         clearCurrentTrade();
+        showNotification('Trade completed! 📋', 'success', 3000);
     });
 
     s.on('auctionStarted', data => {
@@ -138,6 +156,7 @@ export function registerGameEvents(s) {
         auctionBidBtn.disabled = false;
         auctionCloseBtn.style.display = 'none';
         auctionModal.style.display = 'flex';
+        showNotification(`Auction started for ${spaces[data.index].name}! 🏛️`, 'warning', 4000);
     });
 
     s.on('auctionUpdate', data => {

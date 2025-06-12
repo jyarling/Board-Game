@@ -24,16 +24,37 @@
         <div id="layout">
             <div id="controls">
                 <button id="rollBtn">Roll Dice</button>
+                <div id="diceContainer">
+                    <div id="dice1" class="dice">
+                        <div class="face front">⚀</div>
+                        <div class="face back">⚁</div>
+                        <div class="face right">⚂</div>
+                        <div class="face left">⚃</div>
+                        <div class="face top">⚄</div>
+                        <div class="face bottom">⚅</div>
+                    </div>
+                    <div id="dice2" class="dice">
+                        <div class="face front">⚀</div>
+                        <div class="face back">⚁</div>
+                        <div class="face right">⚂</div>
+                        <div class="face left">⚃</div>
+                        <div class="face top">⚄</div>
+                        <div class="face bottom">⚅</div>
+                    </div>
+                </div>
                 <button id="buyBtn" disabled>Buy</button>
                 <button id="tradeBtn" disabled>Trade</button>
                 <button id="payJailBtn" disabled>Pay Bail</button>
                 <button id="useCardBtn" disabled>Use Card</button>
                 <button id="endTurnBtn" disabled>End Turn</button>
+                <button id="soundToggleBtn" class="sound-toggle">🔊 Sound ON</button>
                 <div id="turnIndicator"></div>
                 <div id="chat">
                     <div id="chatMessages"></div>
-                    <input id="chatInput" placeholder="Say something" />
-                    <button id="chatSend">Send</button>
+                    <div class="chat-input-group">
+                        <input id="chatInput" placeholder="Say something..." />
+                        <button id="chatSend">💬</button>
+                    </div>
                 </div>
             </div>
             <div id="boardWrapper">
@@ -48,32 +69,57 @@
     </div>
 
     <div id="tradeModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
-        <div style="background:#fff; padding:10px; max-width:300px;">
+        <div class="trade-container">
             <div id="tradeStart" style="display:none;">
-                <label>Trade with:
-                    <select id="tradeTarget"></select>
-                </label>
-                <button id="tradeInitBtn">Start</button>
+                <div class="trade-header">
+                    <div>Start a Trade</div>
+                </div>
+                <div style="padding: 20px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: bold;">Trade with:
+                        <select id="tradeTarget" style="width: 100%; padding: 8px; margin-top: 5px; border-radius: 6px; border: 2px solid #ddd;"></select>
+                    </label>
+                    <button id="tradeInitBtn" class="trade-btn accept" style="width: 100%;">Start Trade</button>
+                </div>
             </div>
             <div id="tradeWindow" style="display:none;">
-                <h3 id="tradeTitle"></h3>
-                <div style="display:flex; gap:10px;">
-                    <div>
+                <div class="trade-header">
+                    <div id="tradeTitle">Trading with Player</div>
+                </div>
+                <div class="trade-body">
+                    <div class="trade-section">
                         <h4>Your Offer</h4>
-                        <div id="yourProps"></div>
-                        <div>Money <input type="number" id="yourMoney" value="0" min="0" style="width:60px"></div>
-                        <div>Cards <input type="number" id="yourCards" value="0" min="0" style="width:60px"></div>
+                        <div class="property-list" id="yourPropsDropZone">
+                            <div id="yourProps"></div>
+                        </div>
+                        <div class="money-input-group">
+                            <label>💰 Money:</label>
+                            <input type="number" id="yourMoney" value="0" min="0" class="money-input">
+                        </div>
+                        <div class="money-input-group">
+                            <label>🃏 Cards:</label>
+                            <input type="number" id="yourCards" value="0" min="0" class="money-input">
+                        </div>
                     </div>
-                    <div>
+                    <div class="trade-section">
                         <h4>Their Offer</h4>
-                        <div id="theirProps"></div>
-                        <div>Money <input type="number" id="theirMoney" value="0" min="0" style="width:60px"></div>
-                        <div>Cards <input type="number" id="theirCards" value="0" min="0" style="width:60px"></div>
+                        <div class="property-list" id="theirPropsDropZone">
+                            <div id="theirProps"></div>
+                        </div>
+                        <div class="money-input-group">
+                            <label>💰 Money:</label>
+                            <input type="number" id="theirMoney" value="0" min="0" class="money-input" disabled>
+                        </div>
+                        <div class="money-input-group">
+                            <label>🃏 Cards:</label>
+                            <input type="number" id="theirCards" value="0" min="0" class="money-input" disabled>
+                        </div>
                     </div>
                 </div>
-                <div id="tradeStatus" style="margin-top:5px;"></div>
-                <button id="tradeAcceptBtn">Accept</button>
-                <button id="tradeCancelBtn">Cancel</button>
+                <div id="tradeStatus" class="trade-status"></div>
+                <div class="trade-actions">
+                    <button id="tradeAcceptBtn" class="trade-btn accept">Accept Trade</button>
+                    <button id="tradeCancelBtn" class="trade-btn cancel">Cancel Trade</button>
+                </div>
             </div>
         </div>
     </div>
@@ -87,6 +133,25 @@
             <button id="auctionCloseBtn" style="display:none;">Close</button>
         </div>
     </div>
+
+    <div id="propertyCardModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; z-index:1000;">
+        <div class="property-card">
+            <div class="property-card-header" id="propertyCardHeader">
+                <div class="property-card-title" id="propertyCardTitle"></div>
+            </div>
+            <div class="property-card-body">
+                <div class="property-card-price" id="propertyCardPrice"></div>
+                <div class="property-card-rent" id="propertyCardRent"></div>
+                <div class="property-card-houses" id="propertyCardHouses"></div>
+                <div class="property-card-mortgage" id="propertyCardMortgage"></div>
+                <div class="property-card-owner" id="propertyCardOwner"></div>
+            </div>
+            <button id="propertyCardClose" class="property-card-close">×</button>
+        </div>
+    </div>
+
+    <!-- Notification System -->
+    <div id="notificationContainer"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="module" src="js/index.js"></script>

@@ -1,7 +1,7 @@
 import * as DOM from './dom.js';
 import { setSocket } from './dom.js';
 import { registerGameEvents } from './socketHandlers.js';
-const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator } = DOM;
+const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
 let { socket } = DOM;
 let menuPropertyIndex = null;
 export let boardSize = 40;
@@ -82,6 +82,21 @@ joinBtn.onclick = () => {
     });
 };
 
+export function animateDiceRoll(die1Value, die2Value) {
+    // Play dice roll sound
+    soundSystem.playDiceRoll();
+    
+    // Add rolling animation
+    dice1.className = 'dice rolling';
+    dice2.className = 'dice rolling';
+    
+    // After animation completes, show the result
+    setTimeout(() => {
+        dice1.className = `dice show-${die1Value}`;
+        dice2.className = `dice show-${die2Value}`;
+    }, 1000);
+}
+
 rollBtn.onclick = () => {
     rollBtn.disabled = true;
     socket.emit('rollDice');
@@ -127,7 +142,7 @@ function sendTradeUpdate() {
     const offer = {
         money: parseInt(yourMoneyInput.value, 10) || 0,
         cards: parseInt(yourCardsInput.value, 10) || 0,
-        properties: Array.from(yourPropsDiv.querySelectorAll('input:checked')).map(c => parseInt(c.value, 10))
+        properties: Array.from(yourPropsDiv.querySelectorAll('.trade-property')).map(prop => parseInt(prop.dataset.propertyIndex, 10))
     };
     socket.emit('updateTrade', { id: currentTrade.id, offer });
 }
@@ -135,9 +150,6 @@ function sendTradeUpdate() {
 // Live update trade offer when user changes inputs
 yourMoneyInput.addEventListener('input', sendTradeUpdate);
 yourCardsInput.addEventListener('input', sendTradeUpdate);
-yourPropsDiv.addEventListener('change', e => {
-    if (e.target.tagName === 'INPUT') sendTradeUpdate();
-});
 
 tradeAcceptBtn.onclick = () => {
     if (!currentTrade) return;
@@ -176,6 +188,23 @@ chatInput.addEventListener('keyup', e => {
     if (e.key === 'Enter') chatSend.click();
 });
 
+propertyCardClose.onclick = () => {
+    propertyCardModal.style.display = 'none';
+};
+
+// Close property card when clicking outside
+propertyCardModal.addEventListener('click', e => {
+    if (e.target === propertyCardModal) {
+        propertyCardModal.style.display = 'none';
+    }
+});
+
+soundToggleBtn.onclick = () => {
+    const enabled = soundSystem.toggle();
+    soundToggleBtn.textContent = enabled ? '🔊 Sound ON' : '🔇 Sound OFF';
+    soundToggleBtn.classList.toggle('disabled', !enabled);
+};
+
 
 export function buildBoard() {
     const N = 11; // 11x11 grid => 40 spaces
@@ -190,20 +219,56 @@ export function buildBoard() {
         const spaceData = spaces[idx] || { name: '', color: '' };
         const div = document.createElement('div');
         div.className = 'space';
-        if (spaceData.color) {
+        
+        // Add corner class for corner spaces
+        if (idx === 0 || idx === 10 || idx === 20 || idx === 30) {
+            div.classList.add('corner');
+        }
+        
+        // Add property class and color for properties
+        if (spaceData.color && !spaceData.railroad && !spaceData.utility) {
             div.classList.add('property');
             div.style.borderTopColor = spaceData.color;
         }
+        
+        // Add railroad class
+        if (spaceData.railroad) {
+            div.classList.add('railroad');
+        }
+        
+        // Add utility class
+        if (spaceData.utility) {
+            div.classList.add('utility');
+        }
+        
         div.dataset.index = idx;
         div.style.gridRowStart = pos.row + 1;
         div.style.gridColumnStart = pos.col + 1;
-        const price = spaceData.price ? `<div>$${spaceData.price}</div>` : '';
-        div.innerHTML = `<div>${spaceData.icon || ''}</div><div>${spaceData.name}</div>${price}<div class="buildings"></div><div class="tokens"></div>`;
+        
+        const price = spaceData.price && spaceData.price > 0 ? `<div class="space-price">$${spaceData.price}</div>` : '';
+        const icon = spaceData.icon ? `<div class="space-icon">${spaceData.icon}</div>` : '';
+        let nameDiv = '';
+        
+        if (spaceData.railroad) {
+            nameDiv = `<div class="space-name">${spaceData.name}</div>`;
+        } else {
+            nameDiv = `<div class="space-name">${spaceData.name}</div>`;
+        }
+        
+        div.innerHTML = `${icon}${nameDiv}${price}<div class="buildings"></div><div class="tokens"></div>`;
         div.addEventListener('contextmenu', e => {
             e.preventDefault();
             const rect = boardWrapper.getBoundingClientRect();
             showPropertyMenu(idx, e.clientX - rect.left, e.clientY - rect.top);
         });
+        
+        // Add click handler to show property card
+        div.addEventListener('click', e => {
+            if (spaceData.price && spaceData.price > 0) {
+                showPropertyCard(idx);
+            }
+        });
+        
         boardDiv.appendChild(div);
     });
     updateSpaceCenters();
@@ -237,7 +302,12 @@ function animateTokenMove(token, idx, from, to) {
         token.style.transition = 'none';
         const start = spaceCenters[to];
         token.style.transform = `translate(${start.x}px, ${start.y}px) translate(-50%, -50%)`;
-        requestAnimationFrame(() => { token.style.transition = ''; });
+        requestAnimationFrame(() => { 
+            token.style.transition = ''; 
+            // Add landing bounce effect
+            token.style.animation = 'tokenLand 0.3s ease-out';
+            setTimeout(() => token.style.animation = '', 300);
+        });
         lastPositions[idx] = to;
         return;
     }
@@ -248,12 +318,25 @@ function animateTokenMove(token, idx, from, to) {
     const step = () => {
         current = (current + 1) % boardSize;
         const pos = spaceCenters[current];
-        token.style.transitionDuration = '200ms';
-        token.style.transform = `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%)`;
+        token.style.transitionDuration = '300ms';
+        token.style.transitionTimingFunction = 'cubic-bezier(0.4, 0, 0.2, 1)';
+        
+        // Add slight bounce during movement
+        if (current !== to) {
+            token.style.transform = `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%) scale(1.05)`;
+        } else {
+            token.style.transform = `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%)`;
+        }
+        
         if (current !== to) {
             token.addEventListener('transitionend', step, { once: true });
         } else {
             lastPositions[idx] = to;
+            // Add landing effect
+            token.style.animation = 'tokenLand 0.4s ease-out';
+            setTimeout(() => token.style.animation = '', 400);
+            // Play move sound when token lands
+            soundSystem.playMove();
         }
     };
     step();
@@ -286,7 +369,7 @@ export function renderOwnership() {
     document.querySelectorAll('.space').forEach(div => {
         div.classList.remove('owned-0', 'owned-1', 'owned-2', 'owned-3', 'mortgaged');
         const b = div.querySelector('.buildings');
-        if (b) b.textContent = '';
+        if (b) b.innerHTML = '';
     });
     propertyOwners.forEach((owner, idx) => {
         const space = boardDiv.querySelector(`.space[data-index="${idx}"]`);
@@ -297,7 +380,21 @@ export function renderOwnership() {
         if (b) {
             const count = propertyHouses[idx] || 0;
             if (count > 0) {
-                b.textContent = count === 5 ? '🏨' : '🏠'.repeat(count);
+                b.innerHTML = ''; // Clear existing buildings
+                if (count === 5) {
+                    // Hotel
+                    const hotel = document.createElement('div');
+                    hotel.className = 'building hotel';
+                    b.appendChild(hotel);
+                } else {
+                    // Houses
+                    for (let i = 0; i < count; i++) {
+                        const house = document.createElement('div');
+                        house.className = 'building';
+                        house.style.animationDelay = `${i * 0.1}s`;
+                        b.appendChild(house);
+                    }
+                }
             }
         }
     });
@@ -307,23 +404,55 @@ export function renderStats() {
     statsDiv.innerHTML = '';
     players.forEach((p, idx) => {
         const div = document.createElement('div');
-        div.style.border = '1px solid #ccc';
-        div.style.padding = '4px';
-        div.style.marginBottom = '4px';
-        const cardInfo = p.items && p.items.getOutOfJail ? `Get Out of Jail: ${p.items.getOutOfJail}` : '';
+        div.className = 'player-card';
+        div.style.cssText = `
+            background: linear-gradient(145deg, #ffffff, #f5f5f5);
+            border: 2px solid ${getTokenColor(idx)};
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        `;
+        
+        const tokenColor = getTokenColor(idx);
+        const cardInfo = p.items && p.items.getOutOfJail ? `<div class="jail-cards">🃏 Get Out of Jail: ${p.items.getOutOfJail}</div>` : '';
+        
         let props = p.properties.map(i => {
             const mort = propertyMortgaged[i];
             const houses = propertyHouses[i] || 0;
-            let html = `${spaces[i].name} ${mort ? '(M)' : ''} ${houses>0 ? 'H:'+houses : ''}`;
-            if (p.id === playerId) {
-                const mortBtn = `<button data-act="mortgage" data-index="${i}">${mort?'Unmortgage':'Mortgage'}</button>`;
-                const buyBtn = !mort && houses < 5 ? `<button data-act="buyHouse" data-index="${i}">+House</button>` : '';
-                const sellBtn = houses > 0 ? `<button data-act="sellHouse" data-index="${i}">Sell</button>` : '';
-                html += ` ${mortBtn}${buyBtn}${sellBtn}`;
+            const spaceName = spaces[i].name;
+            const spaceColor = spaces[i].color || '#888';
+            
+            let html = `<div class="property-item" style="border-left: 3px solid ${spaceColor}; padding-left: 5px; margin: 2px 0;">`;
+            html += `<span class="property-name">${spaceName}</span>`;
+            
+            if (mort) html += ` <span class="mortgage-indicator">(M)</span>`;
+            if (houses > 0) {
+                const buildingText = houses === 5 ? '🏨' : '🏠'.repeat(houses);
+                html += ` <span class="buildings-indicator">${buildingText}</span>`;
             }
-            return `<div>${html}</div>`;
+            
+            if (p.id === playerId) {
+                html += `<div class="property-actions">`;
+                html += `<button class="action-btn" data-act="mortgage" data-index="${i}">${mort?'Unmortgage':'Mortgage'}</button>`;
+                if (!mort && houses < 5) html += `<button class="action-btn" data-act="buyHouse" data-index="${i}">+House</button>`;
+                if (houses > 0) html += `<button class="action-btn" data-act="sellHouse" data-index="${i}">Sell</button>`;
+                html += `</div>`;
+            }
+            html += `</div>`;
+            return html;
         }).join('');
-        div.innerHTML = `<strong style="color:${getTokenColor(idx)}">${p.name}</strong><br>$${p.money}<br>${props}<br>${cardInfo}`;
+        
+        div.innerHTML = `
+            <div class="player-header">
+                <span class="player-token" style="background: ${tokenColor}; color: white; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">${['🎩','🚗','🐕','👢'][idx]}</span>
+                <strong class="player-name" style="color: ${tokenColor}; margin-left: 8px;">${p.name}</strong>
+            </div>
+            <div class="player-money" style="font-size: 18px; font-weight: bold; color: #2c5234; margin: 5px 0;">$${p.money.toLocaleString()}</div>
+            <div class="player-properties">${props}</div>
+            ${cardInfo}
+        `;
+        
         statsDiv.appendChild(div);
     });
 }
@@ -331,6 +460,75 @@ export function renderStats() {
 function getTokenColor(idx) {
     const colors = ['red','blue','green','yellow'];
     return colors[idx] || 'black';
+}
+
+export function showPropertyCard(spaceIndex) {
+    const spaceData = spaces[spaceIndex];
+    if (!spaceData || !spaceData.price) return;
+    
+    // Set header color based on property type
+    if (spaceData.color) {
+        propertyCardHeader.style.background = spaceData.color;
+    } else if (spaceData.railroad) {
+        propertyCardHeader.style.background = 'linear-gradient(135deg, #000000, #333333)';
+    } else if (spaceData.utility) {
+        propertyCardHeader.style.background = 'linear-gradient(135deg, #4a90e2, #2980b9)';
+    }
+    
+    // Set title and price
+    propertyCardTitle.textContent = spaceData.name;
+    propertyCardPrice.textContent = `$${spaceData.price}`;
+    
+    // Build rent information
+    let rentHtml = '';
+    if (spaceData.rentTable) {
+        rentHtml = '<strong>RENT:</strong><br>';
+        const rentLabels = spaceData.railroad ? 
+            ['1 Railroad', '2 Railroads', '3 Railroads', '4 Railroads'] :
+            spaceData.utility ? 
+                ['If one utility owned', 'If both utilities owned'] :
+                ['Base Rent', 'With 1 House', 'With 2 Houses', 'With 3 Houses', 'With 4 Houses', 'With Hotel'];
+        
+        spaceData.rentTable.forEach((rent, i) => {
+            if (i < rentLabels.length) {
+                rentHtml += `<div class="rent-line"><span>${rentLabels[i]}:</span><span>$${rent}</span></div>`;
+            }
+        });
+    } else if (spaceData.utility) {
+        rentHtml = '<strong>RENT:</strong><br>';
+        rentHtml += '<div class="rent-line"><span>If one utility owned:</span><span>4 × dice roll</span></div>';
+        rentHtml += '<div class="rent-line"><span>If both utilities owned:</span><span>10 × dice roll</span></div>';
+    }
+    propertyCardRent.innerHTML = rentHtml;
+    
+    // House cost information
+    let houseInfo = '';
+    if (spaceData.houseCost) {
+        houseInfo = `House cost: $${spaceData.houseCost}`;
+    }
+    propertyCardHouses.innerHTML = houseInfo;
+    
+    // Mortgage information
+    const mortgageValue = Math.floor(spaceData.price / 2);
+    propertyCardMortgage.innerHTML = `Mortgage Value: $${mortgageValue}`;
+    
+    // Owner information
+    const owner = propertyOwners[spaceIndex];
+    if (owner !== null && owner !== undefined) {
+        const ownerPlayer = players[owner];
+        const mortgaged = propertyMortgaged[spaceIndex];
+        const houses = propertyHouses[spaceIndex] || 0;
+        let ownerInfo = `<strong>Owner:</strong> ${ownerPlayer?.name || 'Unknown'}`;
+        if (mortgaged) ownerInfo += ' (MORTGAGED)';
+        if (houses > 0) {
+            ownerInfo += `<br><strong>Buildings:</strong> ${houses === 5 ? '1 Hotel' : houses + ' House' + (houses > 1 ? 's' : '')}`;
+        }
+        propertyCardOwner.innerHTML = ownerInfo;
+    } else {
+        propertyCardOwner.innerHTML = '<strong>Status:</strong> Available for purchase';
+    }
+    
+    propertyCardModal.style.display = 'flex';
 }
 
 export function updateBuyButton() {
@@ -405,48 +603,154 @@ export function populateTradeWindow() {
     const otherIdx = currentTrade.playerA === myIdx ? currentTrade.playerB : currentTrade.playerA;
     tradeTitle.textContent = `Trading with ${players[otherIdx].name}`;
 
+    // Clear previous properties
     yourPropsDiv.innerHTML = '';
     theirPropsDiv.innerHTML = '';
+
+    // My available properties (draggable)
     players[myIdx].properties.forEach(i => {
         if (!propertyMortgaged[i]) {
-            const cb = document.createElement('label');
-            cb.innerHTML = `<input type="checkbox" value="${i}"> ${spaces[i].name}`;
-            if (currentTrade.playerA === myIdx ? currentTrade.offerA.properties.includes(i) : currentTrade.offerB.properties.includes(i)) {
-                cb.querySelector('input').checked = true;
+            const propDiv = createTradeProperty(i, true);
+            const isOffered = currentTrade.playerA === myIdx ? 
+                currentTrade.offerA.properties.includes(i) : 
+                currentTrade.offerB.properties.includes(i);
+            
+            if (isOffered) {
+                yourPropsDiv.appendChild(propDiv);
+            } else {
+                // Add to available properties list
+                if (!document.getElementById('availableProps')) {
+                    const availableDiv = document.createElement('div');
+                    availableDiv.id = 'availableProps';
+                    availableDiv.innerHTML = '<h5>Available Properties (drag to offer):</h5>';
+                    availableDiv.style.marginTop = '10px';
+                    availableDiv.style.padding = '10px';
+                    availableDiv.style.border = '1px solid #ddd';
+                    availableDiv.style.borderRadius = '6px';
+                    availableDiv.style.backgroundColor = '#f9f9f9';
+                    yourPropsDiv.parentElement.appendChild(availableDiv);
+                }
+                document.getElementById('availableProps').appendChild(propDiv);
             }
-            yourPropsDiv.appendChild(cb);
-        }
-    });
-    players[otherIdx].properties.forEach(i => {
-        if (!propertyMortgaged[i]) {
-            const cb = document.createElement('label');
-            cb.innerHTML = `<input type="checkbox" value="${i}" disabled> ${spaces[i].name}`;
-            if (currentTrade.playerA === otherIdx ? currentTrade.offerA.properties.includes(i) : currentTrade.offerB.properties.includes(i)) {
-                cb.querySelector('input').checked = true;
-            }
-            theirPropsDiv.appendChild(cb);
         }
     });
 
+    // Their offered properties (read-only)
+    players[otherIdx].properties.forEach(i => {
+        if (!propertyMortgaged[i]) {
+            const isOffered = currentTrade.playerA === otherIdx ? 
+                currentTrade.offerA.properties.includes(i) : 
+                currentTrade.offerB.properties.includes(i);
+            
+            if (isOffered) {
+                const propDiv = createTradeProperty(i, false);
+                theirPropsDiv.appendChild(propDiv);
+            }
+        }
+    });
+
+    // Setup drop zones
+    setupDropZones();
+
+    // Update money and cards
     if (currentTrade.playerA === myIdx) {
         yourMoneyInput.value = currentTrade.offerA.money;
         yourCardsInput.value = currentTrade.offerA.cards;
         theirMoneyInput.value = currentTrade.offerB.money;
         theirCardsInput.value = currentTrade.offerB.cards;
-        tradeStatusDiv.textContent = currentTrade.acceptedA ? 'You accepted' : '';
-        if (currentTrade.acceptedB) tradeStatusDiv.textContent += ' | Opponent accepted';
+        let statusText = '';
+        if (currentTrade.acceptedA) statusText += 'You accepted';
+        if (currentTrade.acceptedB) statusText += (statusText ? ' | ' : '') + 'Opponent accepted';
+        tradeStatusDiv.textContent = statusText;
+        tradeStatusDiv.className = 'trade-status' + (currentTrade.acceptedA || currentTrade.acceptedB ? ' accepted' : '');
     } else {
         yourMoneyInput.value = currentTrade.offerB.money;
         yourCardsInput.value = currentTrade.offerB.cards;
         theirMoneyInput.value = currentTrade.offerA.money;
         theirCardsInput.value = currentTrade.offerA.cards;
-        tradeStatusDiv.textContent = currentTrade.acceptedB ? 'You accepted' : '';
-        if (currentTrade.acceptedA) tradeStatusDiv.textContent += ' | Opponent accepted';
+        let statusText = '';
+        if (currentTrade.acceptedB) statusText += 'You accepted';
+        if (currentTrade.acceptedA) statusText += (statusText ? ' | ' : '') + 'Opponent accepted';
+        tradeStatusDiv.textContent = statusText;
+        tradeStatusDiv.className = 'trade-status' + (currentTrade.acceptedA || currentTrade.acceptedB ? ' accepted' : '');
     }
+}
 
-    // Opponent fields should be read-only
-    theirMoneyInput.disabled = true;
-    theirCardsInput.disabled = true;
+function createTradeProperty(propertyIndex, draggable = false) {
+    const space = spaces[propertyIndex];
+    const propDiv = document.createElement('div');
+    propDiv.className = 'trade-property';
+    propDiv.dataset.propertyIndex = propertyIndex;
+    
+    if (draggable) {
+        propDiv.draggable = true;
+        propDiv.addEventListener('dragstart', handleDragStart);
+        propDiv.addEventListener('dragend', handleDragEnd);
+    }
+    
+    const colorBar = document.createElement('div');
+    colorBar.className = 'property-color-bar';
+    colorBar.style.backgroundColor = space.color || (space.railroad ? '#000' : '#4a90e2');
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'property-name';
+    nameSpan.textContent = space.name;
+    
+    propDiv.appendChild(colorBar);
+    propDiv.appendChild(nameSpan);
+    
+    return propDiv;
+}
+
+function setupDropZones() {
+    const yourDropZone = document.getElementById('yourPropsDropZone');
+    const availableProps = document.getElementById('availableProps');
+    
+    [yourDropZone, availableProps].forEach(zone => {
+        if (zone) {
+            zone.addEventListener('dragover', handleDragOver);
+            zone.addEventListener('drop', handleDrop);
+            zone.addEventListener('dragleave', handleDragLeave);
+        }
+    });
+}
+
+function handleDragStart(e) {
+    e.dataTransfer.setData('text/plain', e.target.dataset.propertyIndex);
+    e.target.classList.add('dragging');
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    const propertyIndex = parseInt(e.dataTransfer.getData('text/plain'));
+    const draggedElement = document.querySelector(`[data-property-index="${propertyIndex}"]`);
+    
+    if (draggedElement && e.currentTarget.id === 'yourPropsDropZone') {
+        // Move to offer
+        yourPropsDiv.appendChild(draggedElement);
+        sendTradeUpdate();
+    } else if (draggedElement && e.currentTarget.id === 'availableProps') {
+        // Move back to available
+        e.currentTarget.appendChild(draggedElement);
+        sendTradeUpdate();
+    }
 }
 
 window.addEventListener('resize', () => {
@@ -493,3 +797,162 @@ export function setCurrentAuction(data) {
 export function clearCurrentAuction() {
     currentAuction = null;
 }
+
+// Notification System
+export function showNotification(message, type = 'info', duration = 4000) {
+    // Play notification sound
+    if (type === 'success') {
+        soundSystem.playSuccess();
+    } else if (type === 'error') {
+        soundSystem.playError();
+    } else {
+        soundSystem.playNotification();
+    }
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    notification.innerHTML = `
+        <div class="notification-content">
+            <span class="notification-icon">${icons[type] || icons.info}</span>
+            <span class="notification-text">${message}</span>
+        </div>
+        <button class="notification-close">×</button>
+    `;
+    
+    const closeBtn = notification.querySelector('.notification-close');
+    closeBtn.onclick = () => removeNotification(notification);
+    
+    notificationContainer.appendChild(notification);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+        if (notification.parentNode) {
+            removeNotification(notification);
+        }
+    }, duration);
+    
+    return notification;
+}
+
+function removeNotification(notification) {
+    notification.style.animation = 'notificationFadeOut 0.3s ease-in forwards';
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 300);
+}
+
+// Sound System
+class SoundSystem {
+    constructor() {
+        this.audioContext = null;
+        this.enabled = true;
+        this.volume = 0.3;
+        this.initAudioContext();
+    }
+
+    initAudioContext() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('Web Audio API not supported');
+            this.enabled = false;
+        }
+    }
+
+    async ensureContext() {
+        if (!this.audioContext || !this.enabled) return false;
+        
+        if (this.audioContext.state === 'suspended') {
+            try {
+                await this.audioContext.resume();
+            } catch (e) {
+                console.warn('Could not resume audio context');
+                return false;
+            }
+        }
+        return true;
+    }
+
+    playTone(frequency, duration, type = 'sine') {
+        if (!this.ensureContext()) return;
+        
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        oscillator.frequency.value = frequency;
+        oscillator.type = type;
+        
+        gainNode.gain.setValueAtTime(this.volume, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+        
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + duration);
+    }
+
+    playDiceRoll() {
+        // Dice rolling sound effect
+        this.playTone(220, 0.1, 'square');
+        setTimeout(() => this.playTone(330, 0.1, 'square'), 100);
+        setTimeout(() => this.playTone(440, 0.15, 'sine'), 200);
+    }
+
+    playSuccess() {
+        // Success sound (ascending notes)
+        this.playTone(523, 0.2, 'sine'); // C
+        setTimeout(() => this.playTone(659, 0.2, 'sine'), 100); // E
+        setTimeout(() => this.playTone(784, 0.3, 'sine'), 200); // G
+    }
+
+    playError() {
+        // Error sound (descending notes)
+        this.playTone(330, 0.3, 'sawtooth');
+        setTimeout(() => this.playTone(220, 0.4, 'sawtooth'), 150);
+    }
+
+    playNotification() {
+        // Notification sound
+        this.playTone(800, 0.1, 'sine');
+        setTimeout(() => this.playTone(1000, 0.1, 'sine'), 50);
+    }
+
+    playMove() {
+        // Token move sound
+        this.playTone(400, 0.1, 'triangle');
+    }
+
+    playPurchase() {
+        // Property purchase sound
+        this.playTone(600, 0.15, 'sine');
+        setTimeout(() => this.playTone(800, 0.15, 'sine'), 75);
+        setTimeout(() => this.playTone(1000, 0.2, 'sine'), 150);
+    }
+
+    setVolume(volume) {
+        this.volume = Math.max(0, Math.min(1, volume));
+    }
+
+    toggle() {
+        this.enabled = !this.enabled;
+        return this.enabled;
+    }
+}
+
+export const soundSystem = new SoundSystem();
+
+// Initialize audio context on first user interaction
+document.addEventListener('click', () => {
+    soundSystem.ensureContext();
+}, { once: true });
