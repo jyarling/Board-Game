@@ -19,23 +19,30 @@ function createLobby(code, name) {
 }
 
 io.on('connection', socket => {
-  socket.on('createLobby', data => {
+  socket.on('createLobby', (data, cb) => {
     const { code, name } = data || {};
-    if (!code) return;
+    if (!code) {
+      if (cb) cb({ error: 'Invalid code' });
+      return;
+    }
     if (lobbies[code]) {
+      if (cb) cb({ error: 'Code already exists' });
       socket.emit('lobbyError', 'Code already exists');
       return;
     }
     createLobby(code, name || '');
     socket.emit('lobbyCreated', code);
+    if (cb) cb({ success: true });
   });
 
-  socket.on('joinLobby', code => {
+  socket.on('joinLobby', (code, cb) => {
     if (!lobbies[code]) {
+      if (cb) cb({ error: 'Lobby not found' });
       socket.emit('lobbyError', 'Lobby not found');
       return;
     }
     socket.emit('lobbyJoined', code);
+    if (cb) cb({ success: true });
   });
 });
 

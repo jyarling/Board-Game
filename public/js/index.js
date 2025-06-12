@@ -50,18 +50,36 @@ createBtn.onclick = () => {
     const code = createCodeInput.value.trim();
     const lobbyName = lobbyNameInput.value.trim();
     if (!name || !code) return;
-    rootSocket.emit('createLobby', { code, name: lobbyName });
-    rootSocket.once('lobbyCreated', c => startGame(c, name));
-    rootSocket.once('lobbyError', msg => alert(msg));
+    if (!rootSocket.connected) {
+        alert('Unable to reach server');
+        return;
+    }
+    rootSocket.timeout(5000).emit('createLobby', { code, name: lobbyName }, (err, res) => {
+        if (err) { alert('Server timeout'); return; }
+        if (res && res.error) {
+            alert(res.error);
+        } else {
+            startGame(code, name);
+        }
+    });
 };
 
 joinBtn.onclick = () => {
     const name = nameInput.value.trim();
     const code = joinCodeInput.value.trim();
     if (!name || !code) return;
-    rootSocket.emit('joinLobby', code);
-    rootSocket.once('lobbyJoined', c => startGame(c, name));
-    rootSocket.once('lobbyError', msg => alert(msg));
+    if (!rootSocket.connected) {
+        alert('Unable to reach server');
+        return;
+    }
+    rootSocket.timeout(5000).emit('joinLobby', code, (err, res) => {
+        if (err) { alert('Server timeout'); return; }
+        if (res && res.error) {
+            alert(res.error);
+        } else {
+            startGame(code, name);
+        }
+    });
 };
 
 rollBtn.onclick = () => {
