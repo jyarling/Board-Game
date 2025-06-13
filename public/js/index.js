@@ -802,30 +802,29 @@ export function populateTradeWindow() {
         existingAvailableDiv.remove();
     }
 
+    // Always create the available properties drop zone so items can be dragged back
+    const availableDiv = document.createElement('div');
+    availableDiv.id = 'availableProps';
+    availableDiv.className = 'property-list';
+    availableDiv.innerHTML = '<h5>Available Properties (drag to offer):</h5>';
+    availableDiv.style.marginTop = '10px';
+    availableDiv.style.padding = '10px';
+    availableDiv.style.border = '1px solid #ddd';
+    availableDiv.style.borderRadius = '6px';
+    availableDiv.style.backgroundColor = '#f9f9f9';
+    yourPropsDiv.parentElement.appendChild(availableDiv);
+
     // My available properties (draggable)
     players[myIdx].properties.forEach(i => {
         if (!propertyMortgaged[i]) {
             const propDiv = createTradeProperty(i, true);
-            const isOffered = currentTrade.playerA === myIdx ? 
-                currentTrade.offerA.properties.includes(i) : 
+            const isOffered = currentTrade.playerA === myIdx ?
+                currentTrade.offerA.properties.includes(i) :
                 currentTrade.offerB.properties.includes(i);
-            
+
             if (isOffered) {
                 yourPropsDiv.appendChild(propDiv);
             } else {
-                // Add to available properties list
-                let availableDiv = document.getElementById('availableProps');
-                if (!availableDiv) {
-                    availableDiv = document.createElement('div');
-                    availableDiv.id = 'availableProps';
-                    availableDiv.innerHTML = '<h5>Available Properties (drag to offer):</h5>';
-                    availableDiv.style.marginTop = '10px';
-                    availableDiv.style.padding = '10px';
-                    availableDiv.style.border = '1px solid #ddd';
-                    availableDiv.style.borderRadius = '6px';
-                    availableDiv.style.backgroundColor = '#f9f9f9';
-                    yourPropsDiv.parentElement.appendChild(availableDiv);
-                }
                 availableDiv.appendChild(propDiv);
             }
         }
