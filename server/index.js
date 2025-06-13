@@ -87,6 +87,13 @@ module.exports = function(io, lobbyCode, updateLobbyPlayerCount, setLobbyGameSta
   function handleDoublesAfterMove() {
     const player = state.players[state.currentTurn];
     if (!player) return;
+    
+    // If player is in jail, end turn instead of continuing doubles
+    if (player.inJail) {
+      endCurrentTurn();
+      return;
+    }
+    
     const pos = player.position;
     
     // Check if they landed on a property that can be purchased but isn't owned

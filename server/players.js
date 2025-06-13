@@ -9,7 +9,7 @@ function hasMonopoly(playerIdx, group) {
 
 function getMonopolyProperties(playerIdx, group) {
   return state.PROPERTY_INFO.map((p, i) => ({...p, index: i}))
-    .filter(p => p.group === group && state.propertyOwners[i] === playerIdx)
+    .filter(p => p.group === group && state.propertyOwners[p.index] === playerIdx)
     .map(p => p.index);
 }
 
