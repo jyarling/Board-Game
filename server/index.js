@@ -6,6 +6,7 @@ const auction = require('./auction');
 module.exports = function(io) {
   const TURN_TIMEOUT_MS = 30000;
   const COLORS = ['red', 'blue', 'green', 'yellow'];
+  let gameStarted = false;
 
   function log(message, playerIdx) {
     if (playerIdx != null) {
@@ -19,7 +20,20 @@ module.exports = function(io) {
 
   function startTurnTimer() {
     clearTimeout(state.turnTimer);
+    // Don't start timer if there's an active trade
+    if (state.trades.length > 0) return;
     state.turnTimer = setTimeout(handleTurnTimeout, TURN_TIMEOUT_MS);
+  }
+
+  function pauseTurnTimer() {
+    clearTimeout(state.turnTimer);
+  }
+
+  function resumeTurnTimer() {
+    // Only resume if there are no active trades
+    if (state.trades.length === 0) {
+      startTurnTimer();
+    }
   }
 
   function handleTurnTimeout() {
@@ -40,6 +54,29 @@ module.exports = function(io) {
     }
   }
 
+  function startGameNow() {
+    if (gameStarted || state.players.length === 0) return;
+    gameStarted = true;
+    
+    // Randomize player order
+    for (let i = state.players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [state.players[i], state.players[j]] = [state.players[j], state.players[i]];
+    }
+    
+    state.currentTurn = 0;
+    log(`Game started! ${state.players[0].name} goes first.`);
+    io.emit('gameStarted');
+    io.to(state.players[0].id).emit('yourTurn');
+    state.players.forEach((p, idx) => {
+      if (idx !== 0) {
+        io.to(p.id).emit('notYourTurn');
+      }
+    });
+    io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+    startTurnTimer();
+  }
+
   function endCurrentTurn() {
     if (state.players.length === 0) return;
     let idx = state.currentTurn;
@@ -56,7 +93,7 @@ module.exports = function(io) {
         io.to(p.id).emit('notYourTurn');
       }
     });
-    io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+    io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     startTurnTimer();
   }
 
@@ -64,6 +101,10 @@ module.exports = function(io) {
     socket.on('joinGame', name => {
       if (state.players.length >= 4) {
         socket.emit('message', 'Game is full');
+        return;
+      }
+      if (gameStarted) {
+        socket.emit('message', 'Game already started');
         return;
       }
       const player = {
@@ -79,14 +120,18 @@ module.exports = function(io) {
         lastRoll: 0
       };
       state.players.push(player);
-      socket.emit('joined', socket.id);
+      const isHost = state.players.length === 1;
+      socket.emit('joined', { id: socket.id, isHost });
       log(`${name} joined the game.`);
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
-      if (state.players.length === 1) {
-        io.to(state.players[0].id).emit('yourTurn');
-        startTurnTimer();
-      } else {
-        socket.emit('notYourTurn');
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+      // Don't auto-start the game, wait for host to click start
+      socket.emit('notYourTurn');
+    });
+
+    socket.on('startGame', () => {
+      const playerIdx = state.players.findIndex(p => p.id === socket.id);
+      if (playerIdx === 0 && !gameStarted) { // Only host (first player) can start
+        startGameNow();
       }
     });
 
@@ -97,6 +142,10 @@ module.exports = function(io) {
     });
 
     socket.on('rollDice', () => {
+      if (!gameStarted) {
+        socket.emit('message', 'Game not started yet');
+        return;
+      }
       const player = state.players[state.currentTurn];
       if (!player || player.id !== socket.id) {
         socket.emit('notYourTurn');
@@ -127,7 +176,7 @@ module.exports = function(io) {
             board.movePlayerRelative(state.currentTurn, total, io, log);
           }
         }
-        io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+        io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
         startTurnTimer();
         return;
       }
@@ -156,7 +205,7 @@ module.exports = function(io) {
       state.propertyMortgaged[index] = false;
       state.propertyHouses[index] = 0;
       log(`${player.name} bought ${state.SPACE_NAMES[index]} for $${info.price}.`, state.players.indexOf(player));
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
       startTurnTimer();
     });
 
@@ -173,7 +222,7 @@ module.exports = function(io) {
         state.players[playerIdx].money += Math.floor(state.PROPERTY_INFO[index].price / 2);
         state.propertyMortgaged[index] = true;
       }
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
     socket.on('buyHouse', index => {
@@ -187,7 +236,7 @@ module.exports = function(io) {
       if (state.players[playerIdx].money < info.houseCost) return;
       state.players[playerIdx].money -= info.houseCost;
       state.propertyHouses[index] += 1;
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
     socket.on('sellHouse', index => {
@@ -198,7 +247,7 @@ module.exports = function(io) {
       const info = state.PROPERTY_INFO[index];
       state.propertyHouses[index] -= 1;
       state.players[playerIdx].money += Math.floor(info.houseCost / 2);
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
     socket.on('payJail', () => {
@@ -209,7 +258,7 @@ module.exports = function(io) {
       player.money -= 50;
       player.inJail = false;
       player.jailTurns = 0;
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
     socket.on('useJailCard', () => {
@@ -220,7 +269,7 @@ module.exports = function(io) {
       player.items.getOutOfJail -= 1;
       player.inJail = false;
       player.jailTurns = 0;
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
     socket.on('initiateTrade', targetIdx => {
@@ -237,6 +286,7 @@ module.exports = function(io) {
         acceptedB: false
       };
       state.trades.push(trade);
+      pauseTurnTimer(); // Pause timer when trade starts
       io.to(state.players[playerIdx].id).emit('tradeStarted', trade);
       io.to(state.players[targetIdx].id).emit('tradeStarted', trade);
     });
@@ -271,6 +321,7 @@ module.exports = function(io) {
         state.trades = state.trades.filter(t => t.id !== id);
         io.to(state.players[trade.playerA].id).emit('tradeEnded');
         io.to(state.players[trade.playerB].id).emit('tradeEnded');
+        resumeTurnTimer(); // Resume timer when trade ends
       }
     });
 
@@ -278,8 +329,9 @@ module.exports = function(io) {
       const trade = state.trades.find(t => t.id === id);
       if (!trade) return;
       state.trades = state.trades.filter(t => t.id !== id);
-      io.to(state.players[trade.playerA].id).emit('tradeEnded');
-      io.to(state.players[trade.playerB].id).emit('tradeEnded');
+      io.to(state.players[trade.playerA].id).emit('tradeEnded', { cancelled: true });
+      io.to(state.players[trade.playerB].id).emit('tradeEnded', { cancelled: true });
+      resumeTurnTimer(); // Resume timer when trade cancelled
     });
 
     socket.on('placeBid', () => {
@@ -289,6 +341,10 @@ module.exports = function(io) {
     });
 
     socket.on('endTurn', () => {
+      if (!gameStarted) {
+        socket.emit('message', 'Game not started yet');
+        return;
+      }
       const player = state.players[state.currentTurn];
       if (!player || player.id !== socket.id) {
         socket.emit('notYourTurn');
@@ -312,7 +368,7 @@ module.exports = function(io) {
       state.propertyHouses = state.propertyHouses.map((h, i) => (state.propertyOwners[i] === null ? 0 : h));
       state.propertyOwners = state.propertyOwners.map(o => (o !== null && o > idx ? o - 1 : o));
       log(`${leaving.name} left the game.`);
-      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+      io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
 
       if (state.players.length === 0) {
         state.currentTurn = 0;
@@ -372,6 +428,6 @@ module.exports = function(io) {
     a.items.getOutOfJail += trade.offerB.cards;
 
     log(`${a.name} traded with ${b.name}.`);
-    io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
+    io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
   }
 };

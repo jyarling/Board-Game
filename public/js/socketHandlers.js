@@ -35,6 +35,8 @@ import {
     currentTrade,
     currentAuction,
     setPlayerId,
+    setIsHost,
+    hideStartButton,
     applyState,
     setCurrentTrade,
     clearCurrentTrade,
@@ -45,14 +47,20 @@ import {
 } from './index.js';
 
 export function registerGameEvents(s) {
-    s.on('joined', id => {
-        setPlayerId(id);
+    s.on('joined', data => {
+        setPlayerId(data.id);
+        setIsHost(data.isHost);
         joinDiv.style.display = 'none';
         gameDiv.style.display = 'block';
         if (boardCoords.length === 0) {
             buildBoard();
             renderOwnership();
         }
+    });
+
+    s.on('gameStarted', () => {
+        hideStartButton();
+        showNotification('Game Started! 🎮', 'success', 3000);
     });
 
     s.on('message', msg => {
@@ -73,6 +81,8 @@ export function registerGameEvents(s) {
             const die1 = parseInt(rollMatch[1]);
             const die2 = parseInt(rollMatch[2]);
             animateDiceRoll(die1, die2);
+            // Enable end turn button after dice roll
+            endTurnBtn.disabled = false;
         }
         
         logDiv.appendChild(p);
@@ -89,7 +99,7 @@ export function registerGameEvents(s) {
 
     s.on('yourTurn', () => {
         rollBtn.disabled = false;
-        endTurnBtn.disabled = false;
+        endTurnBtn.disabled = true; // Only enable after dice roll
         tradeBtn.disabled = false;
         updateJailButtons();
         updateBuyButton();
@@ -140,10 +150,14 @@ export function registerGameEvents(s) {
         populateTradeWindow();
     });
 
-    s.on('tradeEnded', () => {
+    s.on('tradeEnded', (data) => {
         tradeModal.style.display = 'none';
         clearCurrentTrade();
-        showNotification('Trade completed! 📋', 'success', 3000);
+        if (data && data.cancelled) {
+            showNotification('Trade cancelled! ❌', 'warning', 3000);
+        } else {
+            showNotification('Trade completed! 📋', 'success', 3000);
+        }
     });
 
     s.on('auctionStarted', data => {

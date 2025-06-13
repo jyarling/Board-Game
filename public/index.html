@@ -23,6 +23,7 @@
     <div id="game" style="display:none;">
         <div id="layout">
             <div id="controls">
+                <button id="startGameBtn" style="display:none;">Start Game</button>
                 <button id="rollBtn">Roll Dice</button>
                 <div id="diceContainer">
                     <div id="dice1" class="dice">
@@ -84,6 +85,7 @@
             <div id="tradeWindow" style="display:none;">
                 <div class="trade-header">
                     <div id="tradeTitle">Trading with Player</div>
+                    <button id="tradeCloseBtn" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.8); border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
                 </div>
                 <div class="trade-body">
                     <div class="trade-section">
@@ -124,13 +126,31 @@
         </div>
     </div>
 
-    <div id="auctionModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
-        <div style="background:#fff; padding:10px; max-width:250px; text-align:center;">
-            <h3 id="auctionTitle"></h3>
-            <div>Current Bid: $<span id="auctionBid">0</span> <span id="auctionBidder"></span></div>
-            <div id="auctionCountdown" style="margin:5px 0;"></div>
-            <button id="auctionBidBtn">Bid</button>
-            <button id="auctionCloseBtn" style="display:none;">Close</button>
+    <div id="auctionModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+        <div class="auction-container">
+            <div class="auction-header">
+                <h3 id="auctionTitle">🏛️ Property Auction</h3>
+            </div>
+            <div class="auction-body">
+                <div class="auction-info">
+                    <div class="auction-bid-display">
+                        <span class="auction-label">Current Bid:</span>
+                        <span class="auction-amount">$<span id="auctionBid">0</span></span>
+                    </div>
+                    <div class="auction-bidder">
+                        <span class="auction-label">Highest Bidder:</span>
+                        <span id="auctionBidder">None</span>
+                    </div>
+                    <div class="auction-timer">
+                        <span class="auction-label">Time Remaining:</span>
+                        <span id="auctionCountdown" class="countdown">0</span>
+                    </div>
+                </div>
+                <div class="auction-actions">
+                    <button id="auctionBidBtn" class="auction-btn bid">Place Bid</button>
+                    <button id="auctionCloseBtn" class="auction-btn close" style="display:none;">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 

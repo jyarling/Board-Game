@@ -1,7 +1,7 @@
 import * as DOM from './dom.js';
 import { setSocket } from './dom.js';
 import { registerGameEvents } from './socketHandlers.js';
-const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
+const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, startGameBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeCloseBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
 let { socket } = DOM;
 let menuPropertyIndex = null;
 export let boardSize = 40;
@@ -20,6 +20,8 @@ export let playerId = null;
 export let currentTrade = null;
 export let lastPositions = {};
 export let tokenElems = {};
+export let isHost = false;
+export let currentTurn = 0;
 
 function highlightMyToken() {
     const idx = players.findIndex(p => p.id === playerId);
@@ -82,6 +84,13 @@ joinBtn.onclick = () => {
     });
 };
 
+startGameBtn.onclick = () => {
+    if (isHost) {
+        socket.emit('startGame');
+        startGameBtn.style.display = 'none';
+    }
+};
+
 export function animateDiceRoll(die1Value, die2Value) {
     // Play dice roll sound
     soundSystem.playDiceRoll();
@@ -130,6 +139,14 @@ tradeInitBtn.onclick = () => {
 };
 
 tradeCancelBtn.onclick = () => {
+    if (currentTrade) {
+        socket.emit('cancelTrade', currentTrade.id);
+    }
+    tradeModal.style.display = 'none';
+    currentTrade = null;
+};
+
+tradeCloseBtn.onclick = () => {
     if (currentTrade) {
         socket.emit('cancelTrade', currentTrade.id);
     }
@@ -405,6 +422,7 @@ export function renderStats() {
     players.forEach((p, idx) => {
         const div = document.createElement('div');
         div.className = 'player-card';
+        const isCurrentPlayerTurn = idx === currentTurn;
         div.style.cssText = `
             background: linear-gradient(145deg, #ffffff, #f5f5f5);
             border: 2px solid ${getTokenColor(idx)};
@@ -412,6 +430,7 @@ export function renderStats() {
             padding: 10px;
             margin-bottom: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ${isCurrentPlayerTurn ? 'box-shadow: 0 0 15px rgba(255, 215, 0, 0.8), 0 2px 8px rgba(0,0,0,0.1); border-color: #ffd700; transform: scale(1.02);' : ''}
         `;
         
         const tokenColor = getTokenColor(idx);
@@ -447,6 +466,7 @@ export function renderStats() {
             <div class="player-header">
                 <span class="player-token" style="background: ${tokenColor}; color: white; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">${['🎩','🚗','🐕','👢'][idx]}</span>
                 <strong class="player-name" style="color: ${tokenColor}; margin-left: 8px;">${p.name}</strong>
+                ${isCurrentPlayerTurn ? '<span style="background: #ffd700; color: #333; font-size: 10px; padding: 2px 6px; border-radius: 12px; margin-left: 8px; font-weight: bold;">🎯 TURN</span>' : ''}
             </div>
             <div class="player-money" style="font-size: 18px; font-weight: bold; color: #2c5234; margin: 5px 0;">$${p.money.toLocaleString()}</div>
             <div class="player-properties">${props}</div>
@@ -607,6 +627,12 @@ export function populateTradeWindow() {
     yourPropsDiv.innerHTML = '';
     theirPropsDiv.innerHTML = '';
 
+    // Clear any existing available properties div
+    const existingAvailableDiv = document.getElementById('availableProps');
+    if (existingAvailableDiv) {
+        existingAvailableDiv.remove();
+    }
+
     // My available properties (draggable)
     players[myIdx].properties.forEach(i => {
         if (!propertyMortgaged[i]) {
@@ -619,8 +645,9 @@ export function populateTradeWindow() {
                 yourPropsDiv.appendChild(propDiv);
             } else {
                 // Add to available properties list
-                if (!document.getElementById('availableProps')) {
-                    const availableDiv = document.createElement('div');
+                let availableDiv = document.getElementById('availableProps');
+                if (!availableDiv) {
+                    availableDiv = document.createElement('div');
                     availableDiv.id = 'availableProps';
                     availableDiv.innerHTML = '<h5>Available Properties (drag to offer):</h5>';
                     availableDiv.style.marginTop = '10px';
@@ -630,7 +657,7 @@ export function populateTradeWindow() {
                     availableDiv.style.backgroundColor = '#f9f9f9';
                     yourPropsDiv.parentElement.appendChild(availableDiv);
                 }
-                document.getElementById('availableProps').appendChild(propDiv);
+                availableDiv.appendChild(propDiv);
             }
         }
     });
@@ -740,15 +767,23 @@ function handleDrop(e) {
     e.currentTarget.classList.remove('drag-over');
     
     const propertyIndex = parseInt(e.dataTransfer.getData('text/plain'));
-    const draggedElement = document.querySelector(`[data-property-index="${propertyIndex}"]`);
+    const draggedElement = document.querySelector(`.trade-property[data-property-index="${propertyIndex}"]`);
     
-    if (draggedElement && e.currentTarget.id === 'yourPropsDropZone') {
-        // Move to offer
-        yourPropsDiv.appendChild(draggedElement);
-        sendTradeUpdate();
-    } else if (draggedElement && e.currentTarget.id === 'availableProps') {
-        // Move back to available
-        e.currentTarget.appendChild(draggedElement);
+    if (!draggedElement) return;
+    
+    // Check if the element is already in the target container to prevent duplication
+    const targetContainer = e.currentTarget.id === 'yourPropsDropZone' ? yourPropsDiv : 
+                           e.currentTarget.id === 'availableProps' ? e.currentTarget : null;
+    
+    if (!targetContainer) return;
+    
+    // Only move if it's not already in the target container
+    if (!targetContainer.contains(draggedElement)) {
+        // Remove from current parent and add to new parent
+        if (draggedElement.parentNode) {
+            draggedElement.parentNode.removeChild(draggedElement);
+        }
+        targetContainer.appendChild(draggedElement);
         sendTradeUpdate();
     }
 }
@@ -774,12 +809,24 @@ export function setPlayerId(id) {
     playerId = id;
 }
 
+export function setIsHost(host) {
+    isHost = host;
+    if (isHost) {
+        startGameBtn.style.display = 'block';
+    }
+}
+
+export function hideStartButton() {
+    startGameBtn.style.display = 'none';
+}
+
 export function applyState(state) {
     boardSize = state.boardSize;
     players = state.players;
     propertyOwners = state.propertyOwners || [];
     propertyMortgaged = state.propertyMortgaged || [];
     propertyHouses = state.propertyHouses || [];
+    currentTurn = state.currentTurn || 0;
 }
 
 export function setCurrentTrade(trade) {
@@ -870,7 +917,7 @@ class SoundSystem {
     }
 
     async ensureContext() {
-        if (!this.audioContext || !this.enabled) return false;
+        if (!this.enabled || !this.audioContext) return false;
         
         if (this.audioContext.state === 'suspended') {
             try {
@@ -884,7 +931,7 @@ class SoundSystem {
     }
 
     playTone(frequency, duration, type = 'sine') {
-        if (!this.ensureContext()) return;
+        if (!this.enabled || !this.ensureContext()) return;
         
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
