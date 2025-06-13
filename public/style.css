@@ -869,10 +869,10 @@ body {
 /* Show specific dice faces */
 .dice.show-1 { transform: rotateX(0deg) rotateY(0deg) !important; animation: none !important; }
 .dice.show-2 { transform: rotateX(0deg) rotateY(180deg) !important; animation: none !important; }
-.dice.show-3 { transform: rotateX(0deg) rotateY(90deg) !important; animation: none !important; }
-.dice.show-4 { transform: rotateX(0deg) rotateY(-90deg) !important; animation: none !important; }
-.dice.show-5 { transform: rotateX(90deg) rotateY(0deg) !important; animation: none !important; }
-.dice.show-6 { transform: rotateX(-90deg) rotateY(0deg) !important; animation: none !important; }
+.dice.show-3 { transform: rotateX(0deg) rotateY(-90deg) !important; animation: none !important; }
+.dice.show-4 { transform: rotateX(0deg) rotateY(90deg) !important; animation: none !important; }
+.dice.show-5 { transform: rotateX(-90deg) rotateY(0deg) !important; animation: none !important; }
+.dice.show-6 { transform: rotateX(90deg) rotateY(0deg) !important; animation: none !important; }
 
 /* Property Card Modal */
 .property-card {
