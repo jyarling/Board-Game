@@ -587,16 +587,17 @@ body {
     }
 }
 
+# chat modifications: attach send button to the input field
 .chat-input-group {
+    position: relative;
     display: flex;
-    gap: 6px;
     align-items: center;
     padding: 2px;
 }
 
 #chatInput {
-    flex: 1;
-    padding: 8px 12px;
+    width: 100%;
+    padding: 8px 40px 8px 12px; /* room for the send button */
     border: 2px solid #e0e0e0;
     border-radius: 20px;
     font-size: 12px;
@@ -613,17 +614,20 @@ body {
     color: white;
     border: none;
     border-radius: 20px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     font-size: 12px;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s ease;
-    width: auto;
-    height: 36px;
-    min-width: 40px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 #chatSend:hover {
