@@ -81,8 +81,9 @@ export function registerGameEvents(s) {
             const die1 = parseInt(rollMatch[1]);
             const die2 = parseInt(rollMatch[2]);
             animateDiceRoll(die1, die2);
-            // Only enable end turn button if it's your turn (check if roll button is enabled)
-            if (!rollBtn.disabled) {
+            // Enable end turn button if it's your turn AND you have rolled
+            // (roll button gets disabled after rolling, trade button stays enabled during your turn)
+            if (!tradeBtn.disabled && rollBtn.disabled) {
                 endTurnBtn.disabled = false;
             }
         }

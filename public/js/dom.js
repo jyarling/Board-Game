@@ -33,6 +33,7 @@ export const tradeStartDiv = document.getElementById('tradeStart');
 export const tradeWindowDiv = document.getElementById('tradeWindow');
 export const tradeTargetSelect = document.getElementById('tradeTarget');
 export const tradeInitBtn = document.getElementById('tradeInitBtn');
+export const tradeStartCloseBtn = document.getElementById('tradeStartCloseBtn');
 export const tradeTitle = document.getElementById('tradeTitle');
 export const yourPropsDiv = document.getElementById('yourProps');
 export const theirPropsDiv = document.getElementById('theirProps');

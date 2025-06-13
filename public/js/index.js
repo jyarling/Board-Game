@@ -1,7 +1,7 @@
 import * as DOM from './dom.js';
 import { setSocket } from './dom.js';
 import { registerGameEvents } from './socketHandlers.js';
-const { rootSocket, joinDiv, gameDiv, nameInput, nameCreateInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, joinTab, createTab, joinPanel, createPanel, lobbyListContainer, refreshLobbiesBtn, startGameBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeCloseBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
+const { rootSocket, joinDiv, gameDiv, nameInput, nameCreateInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, joinTab, createTab, joinPanel, createPanel, lobbyListContainer, refreshLobbiesBtn, startGameBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeStartCloseBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeCloseBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
 let { socket } = DOM;
 let menuPropertyIndex = null;
 export let boardSize = 40;
@@ -178,6 +178,10 @@ rootSocket.on('lobbyListUpdated', (lobbies) => {
 // Load lobbies on page load
 window.addEventListener('load', () => {
     loadLobbies();
+    
+    // Initialize dice to show 1
+    dice1.className = 'dice show-1';
+    dice2.className = 'dice show-1';
 });
 
 startGameBtn.onclick = () => {
@@ -246,6 +250,11 @@ tradeCloseBtn.onclick = () => {
     if (currentTrade) {
         socket.emit('cancelTrade', currentTrade.id);
     }
+    tradeModal.style.display = 'none';
+    currentTrade = null;
+};
+
+tradeStartCloseBtn.onclick = () => {
     tradeModal.style.display = 'none';
     currentTrade = null;
 };
@@ -333,6 +342,17 @@ propertyCardClose.onclick = () => {
 propertyCardModal.addEventListener('click', e => {
     if (e.target === propertyCardModal) {
         propertyCardModal.style.display = 'none';
+    }
+});
+
+// Close trade modal when clicking outside
+tradeModal.addEventListener('click', e => {
+    if (e.target === tradeModal) {
+        if (currentTrade) {
+            socket.emit('cancelTrade', currentTrade.id);
+        }
+        tradeModal.style.display = 'none';
+        currentTrade = null;
     }
 });
 
@@ -973,6 +993,23 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('keydown', e => {
+    // Handle Escape key to close modals
+    if (e.key === 'Escape') {
+        if (tradeModal.style.display !== 'none') {
+            // Close trade modal
+            if (currentTrade) {
+                socket.emit('cancelTrade', currentTrade.id);
+            }
+            tradeModal.style.display = 'none';
+            currentTrade = null;
+        }
+        if (propertyCardModal.style.display !== 'none') {
+            propertyCardModal.style.display = 'none';
+        }
+        return;
+    }
+    
+    // Handle Enter key for game actions
     if (e.key !== 'Enter') return;
     const active = document.activeElement;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
