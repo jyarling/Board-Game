@@ -1012,8 +1012,10 @@ body {
 }
 
 /* Enhanced Trade Interface */
-#tradeModal {
+#tradeModal,
+#auctionModal {
     backdrop-filter: blur(4px);
+    z-index: 1000;
 }
 
 .trade-container {
