@@ -191,7 +191,7 @@ export function registerGameEvents(s) {
         auctionBidBtn.disabled = true;
         auctionCloseBtn.style.display = 'block';
         clearCurrentAuction();
-        setTimeout(() => { auctionModal.style.display = 'none'; }, 2000);
+        setTimeout(() => { auctionModal.style.display = 'none'; }, 500);
     });
 
     // end of registerGameEvents
