@@ -238,6 +238,9 @@ module.exports = function(io, lobbyCode, updateLobbyPlayerCount, setLobbyGameSta
       const player = state.players.find(p => p.id === socket.id);
       if (!player) return;
       const playerIdx = state.players.indexOf(player);
+      // Only allow buying on the player's turn and for the space they're on
+      if (playerIdx !== state.currentTurn) return;
+      if (player.position !== index) return;
       const info = state.PROPERTY_INFO[index];
       if (!info || !info.price || state.propertyOwners[index] != null) return;
       if (player.money < info.price) return;
@@ -248,9 +251,9 @@ module.exports = function(io, lobbyCode, updateLobbyPlayerCount, setLobbyGameSta
       state.propertyHouses[index] = 0;
       log(`${player.name} bought ${state.SPACE_NAMES[index]} for $${info.price}.`, playerIdx);
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
-      
+
       // Check if player is waiting for doubles turn to continue
-      if (playerIdx === state.currentTurn && !player.hasRolled) {
+      if (!player.hasRolled) {
         // This is likely during a doubles turn, continue the turn
         startTurnTimer();
       }

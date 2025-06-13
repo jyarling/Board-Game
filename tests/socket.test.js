@@ -48,44 +48,95 @@ test('rolling dice updates player position', done => {
   root.emit('createLobby', { code: 'game1' });
   root.on('lobbyCreated', () => {
     const game = new Client(`${url}/game-game1`, { transports: ['websocket'], forceNew: true });
-    let stateCount = 0;
-    game.on('state', state => {
-      stateCount++;
-      if (stateCount === 1) {
-        // initial state after joining
+    let rolled = false;
+
+    game.on('joined', data => {
+      if (data.isHost) game.emit('startGame');
+    });
+
+    game.on('yourTurn', () => {
+      if (!rolled) {
+        rolled = true;
         game.emit('rollDice');
-      } else if (stateCount === 2) {
+      }
+    });
+
+    game.on('state', state => {
+      if (rolled && state.players[0].position > 0) {
         expect(state.players[0].position).toBeGreaterThan(0);
         game.close();
         root.close();
         done();
       }
     });
-    game.on('yourTurn', () => {
-      // nothing, wait for state listener to trigger rollDice
-    });
+
     game.emit('joinGame', 'Alice');
   });
 });
 
 test('buying property updates money and ownership', done => {
+  const state = require('../server/state');
   const root = new Client(url, { transports: ['websocket'], forceNew: true });
   root.emit('createLobby', { code: 'game2' });
   root.on('lobbyCreated', () => {
     const game = new Client(`${url}/game-game2`, { transports: ['websocket'], forceNew: true });
-    let stateCount = 0;
-    game.on('state', state => {
-      stateCount++;
-      if (stateCount === 1) {
-        game.emit('buyProperty', 1);
-      } else if (stateCount === 2) {
-        expect(state.players[0].money).toBe(1440);
-        expect(state.propertyOwners[1]).toBe(0);
+    let purchased = false;
+
+    game.on('joined', data => {
+      if (data.isHost) game.emit('startGame');
+    });
+
+    game.on('yourTurn', () => {
+      state.players[0].position = 1;
+      game.emit('buyProperty', 1);
+    });
+
+    game.on('state', s => {
+      if (!purchased && s.propertyOwners[1] === 0) {
+        purchased = true;
+        expect(s.players[0].money).toBe(1440);
+        expect(s.propertyOwners[1]).toBe(0);
         game.close();
         root.close();
         done();
       }
     });
+
     game.emit('joinGame', 'Bob');
+  });
+});
+
+test('cannot buy property when not your turn', done => {
+  const state = require('../server/state');
+  const root = new Client(url, { transports: ['websocket'], forceNew: true });
+  root.emit('createLobby', { code: 'game3' });
+  root.on('lobbyCreated', () => {
+    const host = new Client(`${url}/game-game3`, { transports: ['websocket'], forceNew: true });
+    const guest = new Client(`${url}/game-game3`, { transports: ['websocket'], forceNew: true });
+
+    let joined = 0;
+    function tryStart() {
+      if (joined === 2) host.emit('startGame');
+    }
+
+    host.on('joined', data => { joined++; tryStart(); });
+    guest.on('joined', () => { joined++; tryStart(); });
+
+    guest.on('state', () => {
+      if (state.players.length === 2 && state.currentTurn === 0) {
+        state.players[1].position = 1;
+        guest.emit('buyProperty', 1);
+        setTimeout(() => {
+          expect(state.propertyOwners[1]).toBeNull();
+          host.close();
+          guest.close();
+          root.close();
+          done();
+        }, 50);
+      }
+    });
+
+    host.emit('joinGame', 'Host');
+    guest.emit('joinGame', 'Guest');
   });
 });
