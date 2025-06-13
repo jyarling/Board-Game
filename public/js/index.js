@@ -194,16 +194,24 @@ startGameBtn.onclick = () => {
 export function animateDiceRoll(die1Value, die2Value) {
     // Play dice roll sound
     soundSystem.playDiceRoll();
-    
-    // Add rolling animation
-    dice1.className = 'dice rolling';
-    dice2.className = 'dice rolling';
-    
-    // After animation completes, show the result
-    setTimeout(() => {
+
+    const showClasses = ['show-1', 'show-2', 'show-3', 'show-4', 'show-5', 'show-6'];
+
+    // Remove any existing face classes and start rolling animation
+    dice1.classList.remove(...showClasses);
+    dice2.classList.remove(...showClasses);
+    dice1.classList.add('rolling');
+    dice2.classList.add('rolling');
+
+    const onEnd1 = () => {
         dice1.className = `dice show-${die1Value}`;
+    };
+    const onEnd2 = () => {
         dice2.className = `dice show-${die2Value}`;
-    }, 1000);
+    };
+
+    dice1.addEventListener('animationend', onEnd1, { once: true });
+    dice2.addEventListener('animationend', onEnd2, { once: true });
 }
 
 rollBtn.onclick = () => {
