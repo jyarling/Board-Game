@@ -9,15 +9,36 @@
 <body>
     <h1>Larry &amp; Barney's Monopoly</h1>
     <div id="join">
-        <input id="name" placeholder="Your name" />
-        <div>
-            <input id="lobbyName" placeholder="Lobby name" />
-            <input id="createCode" placeholder="Join code" />
-            <button id="createBtn">Create Lobby</button>
+        <div id="lobbyTabs">
+            <button id="joinTab" class="tab-btn active">Join Game</button>
+            <button id="createTab" class="tab-btn">Create Game</button>
         </div>
-        <div>
-            <input id="joinCode" placeholder="Join code" />
-            <button id="joinBtn">Join Lobby</button>
+        
+        <div id="joinPanel" class="tab-panel active">
+            <input id="name" placeholder="Your name" />
+            <div id="lobbyList">
+                <h3>Available Games</h3>
+                <div id="lobbyListContainer">
+                    <div class="loading">Loading lobbies...</div>
+                </div>
+                <button id="refreshLobbies">🔄 Refresh</button>
+            </div>
+            <div class="manual-join">
+                <h4>Or join with code:</h4>
+                <div>
+                    <input id="joinCode" placeholder="Join code" />
+                    <button id="joinBtn">Join</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="createPanel" class="tab-panel">
+            <input id="nameCreate" placeholder="Your name" />
+            <div>
+                <input id="lobbyName" placeholder="Lobby name" />
+                <input id="createCode" placeholder="Join code" />
+                <button id="createBtn">Create Lobby</button>
+            </div>
         </div>
     </div>
     <div id="game" style="display:none;">
@@ -27,20 +48,98 @@
                 <button id="rollBtn">Roll Dice</button>
                 <div id="diceContainer">
                     <div id="dice1" class="dice">
-                        <div class="face front">⚀</div>
-                        <div class="face back">⚁</div>
-                        <div class="face right">⚂</div>
-                        <div class="face left">⚃</div>
-                        <div class="face top">⚄</div>
-                        <div class="face bottom">⚅</div>
+                        <div class="face front">
+                            <div class="dots">
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face back">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face right">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face left">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face top">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face bottom">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
                     </div>
                     <div id="dice2" class="dice">
-                        <div class="face front">⚀</div>
-                        <div class="face back">⚁</div>
-                        <div class="face right">⚂</div>
-                        <div class="face left">⚃</div>
-                        <div class="face top">⚄</div>
-                        <div class="face bottom">⚅</div>
+                        <div class="face front">
+                            <div class="dots">
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face back">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face right">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face left">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face top">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                        <div class="face bottom">
+                            <div class="dots">
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <button id="buyBtn" disabled>Buy</button>

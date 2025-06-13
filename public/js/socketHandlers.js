@@ -81,8 +81,10 @@ export function registerGameEvents(s) {
             const die1 = parseInt(rollMatch[1]);
             const die2 = parseInt(rollMatch[2]);
             animateDiceRoll(die1, die2);
-            // Enable end turn button after dice roll
-            endTurnBtn.disabled = false;
+            // Only enable end turn button if it's your turn (check if roll button is enabled)
+            if (!rollBtn.disabled) {
+                endTurnBtn.disabled = false;
+            }
         }
         
         logDiv.appendChild(p);

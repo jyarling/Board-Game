@@ -35,7 +35,7 @@ function calculateIncomeTax(idx) {
   return percent < 200 ? percent : 200;
 }
 
-function movePlayer(idx, target, io, log, passGo = false) {
+function movePlayer(idx, target, io, log, passGo = false, endTurnCallback = null) {
   const player = state.players[idx];
   if (!player) return;
   const old = player.position;
@@ -44,14 +44,14 @@ function movePlayer(idx, target, io, log, passGo = false) {
     log(`${player.name} passed Go and collected $200.`, idx);
   }
   player.position = target;
-  handleLanding(player, idx, io, log);
+  handleLanding(player, idx, io, log, endTurnCallback);
 }
 
-function movePlayerRelative(idx, offset, io, log) {
+function movePlayerRelative(idx, offset, io, log, endTurnCallback = null) {
   const player = state.players[idx];
   if (!player) return;
   const newPos = (player.position + offset + state.BOARD_SIZE) % state.BOARD_SIZE;
-  movePlayer(idx, newPos, io, log, newPos < player.position);
+  movePlayer(idx, newPos, io, log, newPos < player.position, endTurnCallback);
 }
 
 function moveToNearest(idx, targets, io, log, doubleRent) {
@@ -64,11 +64,16 @@ function moveToNearest(idx, targets, io, log, doubleRent) {
   if (doubleRent) chargeRent(player, next, io, log, true);
 }
 
-function sendToJail(player, io, log) {
+function sendToJail(player, io, log, endTurnCallback) {
   player.position = 10;
   player.inJail = true;
   player.jailTurns = 0;
+  player.hasRolled = true; // Prevent further actions this turn
   log(`${player.name} was sent to Jail.`, state.players.indexOf(player));
+  // End turn immediately when going to jail
+  if (endTurnCallback) {
+    setTimeout(() => endTurnCallback(), 1000); // Small delay for message to display
+  }
 }
 
 function chargeRent(player, index, io, log, doubleRent = false) {
@@ -97,13 +102,13 @@ function chargeRent(player, index, io, log, doubleRent = false) {
   }
 }
 
-function handleLanding(player, idx, io, log) {
+function handleLanding(player, idx, io, log, endTurnCallback) {
   const pos = player.position;
   const name = state.SPACE_NAMES[pos];
   log(`${player.name} landed on ${name}.`, idx);
 
   if (pos === 30) {
-    sendToJail(player, io, log);
+    sendToJail(player, io, log, endTurnCallback);
     io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses });
     return;
   }

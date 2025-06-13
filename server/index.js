@@ -3,10 +3,14 @@ const players = require('./players');
 const board = require('./board');
 const auction = require('./auction');
 
-module.exports = function(io) {
+module.exports = function(io, lobbyCode, updateLobbyPlayerCount, setLobbyGameStarted) {
   const TURN_TIMEOUT_MS = 30000;
   const COLORS = ['red', 'blue', 'green', 'yellow'];
   let gameStarted = false;
+  
+  // Provide fallback functions if not provided
+  updateLobbyPlayerCount = updateLobbyPlayerCount || (() => {});
+  setLobbyGameStarted = setLobbyGameStarted || (() => {});
 
   function log(message, playerIdx) {
     if (playerIdx != null) {
@@ -58,6 +62,9 @@ module.exports = function(io) {
     if (gameStarted || state.players.length === 0) return;
     gameStarted = true;
     
+    // Update lobby status
+    setLobbyGameStarted(true);
+    
     // Randomize player order
     for (let i = state.players.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -74,6 +81,30 @@ module.exports = function(io) {
       }
     });
     io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+    startTurnTimer();
+  }
+
+  function handleDoublesAfterMove() {
+    const player = state.players[state.currentTurn];
+    if (!player) return;
+    const pos = player.position;
+    
+    // Check if they landed on a property that can be purchased but isn't owned
+    if (!state.currentAuction && state.PROPERTY_INFO[pos].price && state.propertyOwners[pos] == null) {
+      // Start auction for the property before allowing next roll
+      auction.startAuction(pos, io, log, continueDoublesTurn);
+    } else {
+      // No property to buy/auction, continue with doubles turn
+      continueDoublesTurn();
+    }
+  }
+
+  function continueDoublesTurn() {
+    const player = state.players[state.currentTurn];
+    if (!player) return;
+    player.hasRolled = false;
+    io.to(player.id).emit('yourTurn');
+    state.players.forEach(p => { if (p.id !== player.id) io.to(p.id).emit('notYourTurn'); });
     startTurnTimer();
   }
 
@@ -126,6 +157,9 @@ module.exports = function(io) {
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
       // Don't auto-start the game, wait for host to click start
       socket.emit('notYourTurn');
+      
+      // Update lobby player count
+      updateLobbyPlayerCount(state.players.length);
     });
 
     socket.on('startGame', () => {
@@ -165,7 +199,7 @@ module.exports = function(io) {
           player.inJail = false;
           player.jailTurns = 0;
           log(`${player.name} rolled doubles and got out of jail!`, state.currentTurn);
-          board.movePlayerRelative(state.currentTurn, total, io, log);
+          board.movePlayerRelative(state.currentTurn, total, io, log, endCurrentTurn);
         } else {
           player.jailTurns++;
           log(`${player.name} failed to roll doubles in jail (${player.jailTurns}/3).`, state.currentTurn);
@@ -173,7 +207,12 @@ module.exports = function(io) {
             players.changeMoney(state.currentTurn, -50, io, log);
             player.inJail = false;
             player.jailTurns = 0;
-            board.movePlayerRelative(state.currentTurn, total, io, log);
+            board.movePlayerRelative(state.currentTurn, total, io, log, endCurrentTurn);
+          } else {
+            // End turn if still in jail
+            io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+            endCurrentTurn();
+            return;
           }
         }
         io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
@@ -181,32 +220,33 @@ module.exports = function(io) {
         return;
       }
 
-      board.movePlayerRelative(state.currentTurn, total, io, log);
+      board.movePlayerRelative(state.currentTurn, total, io, log, (roll1 === roll2) ? handleDoublesAfterMove : endCurrentTurn);
 
-      if (roll1 === roll2) {
-        player.hasRolled = false;
-        io.to(player.id).emit('yourTurn');
-        state.players.forEach(p => { if (p.id !== player.id) io.to(p.id).emit('notYourTurn'); });
+      if (roll1 !== roll2) {
         startTurnTimer();
-        return;
       }
-      startTurnTimer();
     });
 
     socket.on('buyProperty', index => {
       const player = state.players.find(p => p.id === socket.id);
       if (!player) return;
+      const playerIdx = state.players.indexOf(player);
       const info = state.PROPERTY_INFO[index];
       if (!info || !info.price || state.propertyOwners[index] != null) return;
       if (player.money < info.price) return;
       player.money -= info.price;
       player.properties.push(index);
-      state.propertyOwners[index] = state.players.indexOf(player);
+      state.propertyOwners[index] = playerIdx;
       state.propertyMortgaged[index] = false;
       state.propertyHouses[index] = 0;
-      log(`${player.name} bought ${state.SPACE_NAMES[index]} for $${info.price}.`, state.players.indexOf(player));
+      log(`${player.name} bought ${state.SPACE_NAMES[index]} for $${info.price}.`, playerIdx);
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
-      startTurnTimer();
+      
+      // Check if player is waiting for doubles turn to continue
+      if (playerIdx === state.currentTurn && !player.hasRolled) {
+        // This is likely during a doubles turn, continue the turn
+        startTurnTimer();
+      }
     });
 
     socket.on('mortgageProperty', index => {
@@ -228,25 +268,43 @@ module.exports = function(io) {
     socket.on('buyHouse', index => {
       const playerIdx = state.players.findIndex(p => p.id === socket.id);
       if (playerIdx === -1) return;
-      if (state.propertyOwners[index] !== playerIdx) return;
+      
+      const validation = players.canBuyHouse(index, playerIdx);
+      if (!validation.canBuy) {
+        socket.emit('message', { text: `Cannot buy house: ${validation.reason}`, color: 'red' });
+        return;
+      }
+      
       const info = state.PROPERTY_INFO[index];
-      if (!info.houseCost || state.propertyMortgaged[index]) return;
-      if (!players.hasMonopoly(playerIdx, info.group)) return;
-      if (state.propertyHouses[index] >= 5) return;
-      if (state.players[playerIdx].money < info.houseCost) return;
       state.players[playerIdx].money -= info.houseCost;
       state.propertyHouses[index] += 1;
+      
+      const buildingType = state.propertyHouses[index] === 5 ? 'hotel' : 'house';
+      log(`${state.players[playerIdx].name} bought a ${buildingType} on ${state.SPACE_NAMES[index]} for $${info.houseCost}.`, playerIdx);
+      
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
     socket.on('sellHouse', index => {
       const playerIdx = state.players.findIndex(p => p.id === socket.id);
       if (playerIdx === -1) return;
-      if (state.propertyOwners[index] !== playerIdx) return;
-      if (state.propertyHouses[index] <= 0) return;
+      
+      const validation = players.canSellHouse(index, playerIdx);
+      if (!validation.canSell) {
+        socket.emit('message', { text: `Cannot sell building: ${validation.reason}`, color: 'red' });
+        return;
+      }
+      
       const info = state.PROPERTY_INFO[index];
+      const wasHotel = state.propertyHouses[index] === 5;
+      const sellPrice = Math.floor(info.houseCost / 2);
+      
       state.propertyHouses[index] -= 1;
-      state.players[playerIdx].money += Math.floor(info.houseCost / 2);
+      state.players[playerIdx].money += sellPrice;
+      
+      const buildingType = wasHotel ? 'hotel' : 'house';
+      log(`${state.players[playerIdx].name} sold a ${buildingType} on ${state.SPACE_NAMES[index]} for $${sellPrice}.`, playerIdx);
+      
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
     });
 
@@ -254,22 +312,28 @@ module.exports = function(io) {
       const playerIdx = state.players.findIndex(p => p.id === socket.id);
       if (playerIdx === -1) return;
       const player = state.players[playerIdx];
-      if (!player.inJail || player.money < 50) return;
+      if (!player.inJail || player.money < 50 || playerIdx !== state.currentTurn) return;
       player.money -= 50;
       player.inJail = false;
       player.jailTurns = 0;
+      log(`${player.name} paid $50 bail and got out of jail.`, playerIdx);
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+      // End turn after paying bail
+      endCurrentTurn();
     });
 
     socket.on('useJailCard', () => {
       const playerIdx = state.players.findIndex(p => p.id === socket.id);
       if (playerIdx === -1) return;
       const player = state.players[playerIdx];
-      if (!player.inJail || player.items.getOutOfJail <= 0) return;
+      if (!player.inJail || player.items.getOutOfJail <= 0 || playerIdx !== state.currentTurn) return;
       player.items.getOutOfJail -= 1;
       player.inJail = false;
       player.jailTurns = 0;
+      log(`${player.name} used a Get Out of Jail Free card.`, playerIdx);
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+      // End turn after using card
+      endCurrentTurn();
     });
 
     socket.on('initiateTrade', targetIdx => {
@@ -369,6 +433,9 @@ module.exports = function(io) {
       state.propertyOwners = state.propertyOwners.map(o => (o !== null && o > idx ? o - 1 : o));
       log(`${leaving.name} left the game.`);
       io.emit('state', { players: state.players, boardSize: state.BOARD_SIZE, propertyOwners: state.propertyOwners, propertyMortgaged: state.propertyMortgaged, propertyHouses: state.propertyHouses, currentTurn: state.currentTurn });
+
+      // Update lobby player count
+      updateLobbyPlayerCount(state.players.length);
 
       if (state.players.length === 0) {
         state.currentTurn = 0;

@@ -1,7 +1,7 @@
 import * as DOM from './dom.js';
 import { setSocket } from './dom.js';
 import { registerGameEvents } from './socketHandlers.js';
-const { rootSocket, joinDiv, gameDiv, nameInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, startGameBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeCloseBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
+const { rootSocket, joinDiv, gameDiv, nameInput, nameCreateInput, createBtn, createCodeInput, lobbyNameInput, joinCodeInput, joinBtn, joinTab, createTab, joinPanel, createPanel, lobbyListContainer, refreshLobbiesBtn, startGameBtn, rollBtn, buyBtn, tradeBtn, endTurnBtn, payJailBtn, useCardBtn, logDiv, boardDiv, boardWrapper, tokenLayer, statsDiv, tradeModal, tradeStartDiv, tradeWindowDiv, tradeTargetSelect, tradeInitBtn, tradeTitle, yourPropsDiv, theirPropsDiv, yourMoneyInput, theirMoneyInput, yourCardsInput, theirCardsInput, tradeAcceptBtn, tradeCancelBtn, tradeCloseBtn, tradeStatusDiv, auctionModal, auctionTitle, auctionBidSpan, auctionBidderSpan, auctionCountdown, auctionBidBtn, auctionCloseBtn, chatMessages, chatInput, chatSend, propertyMenu, turnIndicator, dice1, dice2, propertyCardModal, propertyCardHeader, propertyCardTitle, propertyCardPrice, propertyCardRent, propertyCardHouses, propertyCardMortgage, propertyCardOwner, propertyCardClose, notificationContainer, soundToggleBtn } = DOM;
 let { socket } = DOM;
 let menuPropertyIndex = null;
 export let boardSize = 40;
@@ -47,8 +47,103 @@ function startGame(code, name) {
     });
 }
 
+// Tab switching
+joinTab.onclick = () => {
+    joinTab.classList.add('active');
+    createTab.classList.remove('active');
+    joinPanel.classList.add('active');
+    createPanel.classList.remove('active');
+    loadLobbies();
+};
+
+createTab.onclick = () => {
+    createTab.classList.add('active');
+    joinTab.classList.remove('active');
+    createPanel.classList.add('active');
+    joinPanel.classList.remove('active');
+};
+
+// Lobby management
+function loadLobbies() {
+    lobbyListContainer.innerHTML = '<div class="loading">Loading lobbies...</div>';
+    rootSocket.timeout(5000).emit('listLobbies', (err, res) => {
+        if (err) {
+            lobbyListContainer.innerHTML = '<div class="loading">Failed to load lobbies</div>';
+            return;
+        }
+        displayLobbies(res.lobbies || []);
+    });
+}
+
+function displayLobbies(lobbies) {
+    if (lobbies.length === 0) {
+        lobbyListContainer.innerHTML = `
+            <div class="no-lobbies">
+                <h4>No games available</h4>
+                <p>Create a new game to get started!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    lobbyListContainer.innerHTML = lobbies.map(lobby => `
+        <div class="lobby-item" data-code="${lobby.code}">
+            <div class="lobby-info">
+                <h4>${lobby.name}</h4>
+                <p>Created ${formatTimeAgo(lobby.created)}</p>
+                <div class="lobby-code">Code: ${lobby.code}</div>
+            </div>
+            <div class="lobby-status">
+                <div class="player-count">${lobby.players}/${lobby.maxPlayers}</div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Add click handlers
+    document.querySelectorAll('.lobby-item').forEach(item => {
+        item.onclick = () => {
+            const code = item.dataset.code;
+            const name = nameInput.value.trim();
+            if (!name) {
+                nameInput.focus();
+                alert('Please enter your name');
+                return;
+            }
+            joinLobby(code, name);
+        };
+    });
+}
+
+function formatTimeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+}
+
+function joinLobby(code, name) {
+    if (!rootSocket.connected) {
+        alert('Unable to reach server');
+        return;
+    }
+    rootSocket.timeout(5000).emit('joinLobby', code, (err, res) => {
+        if (err) { alert('Server timeout'); return; }
+        if (res && res.error) {
+            alert(res.error);
+        } else {
+            startGame(code, name);
+        }
+    });
+}
+
+refreshLobbiesBtn.onclick = loadLobbies;
+
 createBtn.onclick = () => {
-    const name = nameInput.value.trim();
+    const name = nameCreateInput.value.trim();
     const code = createCodeInput.value.trim();
     const lobbyName = lobbyNameInput.value.trim();
     if (!name || !code) return;
@@ -70,19 +165,20 @@ joinBtn.onclick = () => {
     const name = nameInput.value.trim();
     const code = joinCodeInput.value.trim();
     if (!name || !code) return;
-    if (!rootSocket.connected) {
-        alert('Unable to reach server');
-        return;
-    }
-    rootSocket.timeout(5000).emit('joinLobby', code, (err, res) => {
-        if (err) { alert('Server timeout'); return; }
-        if (res && res.error) {
-            alert(res.error);
-        } else {
-            startGame(code, name);
-        }
-    });
+    joinLobby(code, name);
 };
+
+// Auto-refresh lobbies and listen for updates
+rootSocket.on('lobbyListUpdated', (lobbies) => {
+    if (joinPanel.classList.contains('active')) {
+        displayLobbies(lobbies);
+    }
+});
+
+// Load lobbies on page load
+window.addEventListener('load', () => {
+    loadLobbies();
+});
 
 startGameBtn.onclick = () => {
     if (isHost) {
@@ -165,8 +261,32 @@ function sendTradeUpdate() {
 }
 
 // Live update trade offer when user changes inputs
-yourMoneyInput.addEventListener('input', sendTradeUpdate);
-yourCardsInput.addEventListener('input', sendTradeUpdate);
+yourMoneyInput.addEventListener('input', () => {
+    const myIdx = players.findIndex(p => p.id === playerId);
+    if (myIdx !== -1) {
+        const maxMoney = players[myIdx].money;
+        const value = parseInt(yourMoneyInput.value, 10) || 0;
+        if (value > maxMoney) {
+            yourMoneyInput.value = maxMoney;
+        }
+    }
+    sendTradeUpdate();
+});
+
+yourCardsInput.addEventListener('input', () => {
+    const myIdx = players.findIndex(p => p.id === playerId);
+    if (myIdx !== -1) {
+        const maxCards = players[myIdx].items.getOutOfJail || 0;
+        const value = parseInt(yourCardsInput.value, 10) || 0;
+        if (value > maxCards) {
+            yourCardsInput.value = maxCards;
+        }
+        if (value < 0) {
+            yourCardsInput.value = 0;
+        }
+    }
+    sendTradeUpdate();
+});
 
 tradeAcceptBtn.onclick = () => {
     if (!currentTrade) return;
@@ -275,8 +395,7 @@ export function buildBoard() {
         div.innerHTML = `${icon}${nameDiv}${price}<div class="buildings"></div><div class="tokens"></div>`;
         div.addEventListener('contextmenu', e => {
             e.preventDefault();
-            const rect = boardWrapper.getBoundingClientRect();
-            showPropertyMenu(idx, e.clientX - rect.left, e.clientY - rect.top);
+            showPropertyMenu(idx, e.clientX, e.clientY);
         });
         
         // Add click handler to show property card
@@ -436,14 +555,27 @@ export function renderStats() {
         const tokenColor = getTokenColor(idx);
         const cardInfo = p.items && p.items.getOutOfJail ? `<div class="jail-cards">🃏 Get Out of Jail: ${p.items.getOutOfJail}</div>` : '';
         
-        let props = p.properties.map(i => {
+        // Sort properties by value and group by color
+        const sortedProperties = p.properties
+            .map(i => ({ index: i, space: spaces[i], price: spaces[i].price || 0 }))
+            .sort((a, b) => {
+                // First sort by group/color, then by price
+                const aGroup = a.space.group || (a.space.railroad ? 'railroad' : a.space.utility ? 'utility' : 'other');
+                const bGroup = b.space.group || (b.space.railroad ? 'railroad' : b.space.utility ? 'utility' : 'other');
+                if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
+                return a.price - b.price;
+            });
+
+        let props = sortedProperties.map(prop => {
+            const i = prop.index;
             const mort = propertyMortgaged[i];
             const houses = propertyHouses[i] || 0;
             const spaceName = spaces[i].name;
-            const spaceColor = spaces[i].color || '#888';
+            const spaceColor = spaces[i].color || (spaces[i].railroad ? '#000' : spaces[i].utility ? '#4a90e2' : '#888');
             
             let html = `<div class="property-item" style="border-left: 3px solid ${spaceColor}; padding-left: 5px; margin: 2px 0;">`;
             html += `<span class="property-name">${spaceName}</span>`;
+            if (prop.price > 0) html += ` <span style="color: #666; font-size: 10px;">($${prop.price})</span>`;
             
             if (mort) html += ` <span class="mortgage-indicator">(M)</span>`;
             if (houses > 0) {
@@ -454,8 +586,12 @@ export function renderStats() {
             if (p.id === playerId) {
                 html += `<div class="property-actions">`;
                 html += `<button class="action-btn" data-act="mortgage" data-index="${i}">${mort?'Unmortgage':'Mortgage'}</button>`;
-                if (!mort && houses < 5) html += `<button class="action-btn" data-act="buyHouse" data-index="${i}">+House</button>`;
-                if (houses > 0) html += `<button class="action-btn" data-act="sellHouse" data-index="${i}">Sell</button>`;
+                // Only show house/hotel buttons if player has monopoly and property has houseCost
+                const spaceInfo = spaces[i];
+                if (spaceInfo && spaceInfo.group && spaceInfo.houseCost && hasMonopoly(idx, spaceInfo.group)) {
+                    if (!mort && houses < 5) html += `<button class="action-btn" data-act="buyHouse" data-index="${i}">+House</button>`;
+                    if (houses > 0) html += `<button class="action-btn" data-act="sellHouse" data-index="${i}">Sell</button>`;
+                }
                 html += `</div>`;
             }
             html += `</div>`;
@@ -480,6 +616,15 @@ export function renderStats() {
 function getTokenColor(idx) {
     const colors = ['red','blue','green','yellow'];
     return colors[idx] || 'black';
+}
+
+function hasMonopoly(playerIdx, group) {
+    const groupProperties = spaces
+        .map((space, index) => ({ ...space, index }))
+        .filter(space => space.group === group)
+        .map(space => space.index);
+    
+    return groupProperties.every(index => propertyOwners[index] === playerIdx);
 }
 
 export function showPropertyCard(spaceIndex) {
@@ -590,9 +735,13 @@ function showPropertyMenu(idx, x, y) {
     menuPropertyIndex = idx;
     const mortgaged = propertyMortgaged[idx];
     const houses = propertyHouses[idx] || 0;
+    const spaceInfo = spaces[idx];
     let html = `<button data-act="mortgage">${mortgaged ? 'Unmortgage' : 'Mortgage'}</button>`;
-    if (!mortgaged && houses < 5) html += `<button data-act="buyHouse">Buy House</button>`;
-    if (houses > 0) html += `<button data-act="sellHouse">Sell House</button>`;
+    // Only show house/hotel buttons if player has monopoly and property has houseCost
+    if (spaceInfo && spaceInfo.group && spaceInfo.houseCost && hasMonopoly(myIdx, spaceInfo.group)) {
+        if (!mortgaged && houses < 5) html += `<button data-act="buyHouse">Buy House</button>`;
+        if (houses > 0) html += `<button data-act="sellHouse">Sell House</button>`;
+    }
     propertyMenu.innerHTML = html;
     propertyMenu.style.left = `${x}px`;
     propertyMenu.style.top = `${y}px`;
@@ -723,6 +872,25 @@ function createTradeProperty(propertyIndex, draggable = false) {
     nameSpan.className = 'property-name';
     nameSpan.textContent = space.name;
     
+    // Add remove button for properties in trade
+    if (draggable) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'trade-property-remove';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = 'Remove from trade';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            // Move back to available properties
+            const availableDiv = document.getElementById('availableProps');
+            if (availableDiv && propDiv.parentNode !== availableDiv) {
+                propDiv.parentNode.removeChild(propDiv);
+                availableDiv.appendChild(propDiv);
+                sendTradeUpdate();
+            }
+        };
+        propDiv.appendChild(removeBtn);
+    }
+    
     propDiv.appendChild(colorBar);
     propDiv.appendChild(nameSpan);
     
@@ -740,6 +908,13 @@ function setupDropZones() {
             zone.addEventListener('dragleave', handleDragLeave);
         }
     });
+    
+    // Also set up the yourProps div as a drop zone for removing items
+    if (yourPropsDiv) {
+        yourPropsDiv.addEventListener('dragover', handleDragOver);
+        yourPropsDiv.addEventListener('drop', handleDrop);
+        yourPropsDiv.addEventListener('dragleave', handleDragLeave);
+    }
 }
 
 function handleDragStart(e) {
@@ -771,9 +946,13 @@ function handleDrop(e) {
     
     if (!draggedElement) return;
     
-    // Check if the element is already in the target container to prevent duplication
-    const targetContainer = e.currentTarget.id === 'yourPropsDropZone' ? yourPropsDiv : 
-                           e.currentTarget.id === 'availableProps' ? e.currentTarget : null;
+    // Determine target container
+    let targetContainer = null;
+    if (e.currentTarget.id === 'yourPropsDropZone' || e.currentTarget === yourPropsDiv) {
+        targetContainer = yourPropsDiv;
+    } else if (e.currentTarget.id === 'availableProps') {
+        targetContainer = e.currentTarget;
+    }
     
     if (!targetContainer) return;
     

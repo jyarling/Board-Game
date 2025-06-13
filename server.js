@@ -14,11 +14,55 @@ const lobbies = {};
 
 function createLobby(code, name) {
   const nsp = io.of(`/game-${code}`);
-  setupGame(nsp);
-  lobbies[code] = { name };
+  
+  // Wrap the functions to ensure they have the correct code context
+  const wrappedUpdatePlayerCount = (count) => updateLobbyPlayerCount(code, count);
+  const wrappedSetGameStarted = (started) => setLobbyGameStarted(code, started);
+  
+  setupGame(nsp, code, wrappedUpdatePlayerCount, wrappedSetGameStarted);
+  lobbies[code] = { 
+    name,
+    players: 0,
+    gameStarted: false,
+    created: Date.now()
+  };
+}
+
+function updateLobbyPlayerCount(code, count) {
+  if (lobbies[code]) {
+    lobbies[code].players = count;
+    // Broadcast updated lobby list to all connected clients
+    io.emit('lobbyListUpdated', getActiveLobbies());
+  }
+}
+
+function setLobbyGameStarted(code, started) {
+  if (lobbies[code]) {
+    lobbies[code].gameStarted = started;
+    // Broadcast updated lobby list to all connected clients
+    io.emit('lobbyListUpdated', getActiveLobbies());
+  }
+}
+
+function getActiveLobbies() {
+  return Object.entries(lobbies)
+    .filter(([code, lobby]) => !lobby.gameStarted && lobby.players < 4)
+    .map(([code, lobby]) => ({
+      code,
+      name: lobby.name || `Game ${code}`,
+      players: lobby.players,
+      maxPlayers: 4,
+      created: lobby.created
+    }))
+    .sort((a, b) => b.created - a.created);
 }
 
 io.on('connection', socket => {
+  socket.on('listLobbies', (cb) => {
+    const activeLobbies = getActiveLobbies();
+    if (cb) cb({ lobbies: activeLobbies });
+  });
+
   socket.on('createLobby', (data, cb) => {
     const { code, name } = data || {};
     if (!code) {
@@ -32,6 +76,10 @@ io.on('connection', socket => {
     }
     createLobby(code, name || '');
     socket.emit('lobbyCreated', code);
+    
+    // Broadcast updated lobby list to all connected clients
+    io.emit('lobbyListUpdated', getActiveLobbies());
+    
     if (cb) cb({ success: true });
   });
 
@@ -45,6 +93,8 @@ io.on('connection', socket => {
     if (cb) cb({ success: true });
   });
 });
+
+// Lobby management functions are passed directly to game modules
 
 const PORT = process.env.PORT || 3000;
 
