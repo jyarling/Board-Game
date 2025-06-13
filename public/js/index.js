@@ -466,11 +466,15 @@ function animateTokenMove(token, idx, from, to) {
         token.style.transition = 'none';
         const start = spaceCenters[to];
         token.style.transform = `translate(${start.x}px, ${start.y}px) translate(-50%, -50%)`;
-        requestAnimationFrame(() => { 
-            token.style.transition = ''; 
-            // Add landing bounce effect
-            token.style.animation = 'tokenLand 0.3s ease-out';
-            setTimeout(() => token.style.animation = '', 300);
+        requestAnimationFrame(() => {
+            token.style.transition = '';
+            // Add landing bounce effect without resetting position
+            const pos = spaceCenters[to];
+            token.animate([
+                { transform: `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%) scale(1.2)` },
+                { transform: `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%) scale(0.9)` },
+                { transform: `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%) scale(1)` }
+            ], { duration: 300, easing: 'ease-out' });
         });
         lastPositions[idx] = to;
         return;
@@ -496,9 +500,13 @@ function animateTokenMove(token, idx, from, to) {
             token.addEventListener('transitionend', step, { once: true });
         } else {
             lastPositions[idx] = to;
-            // Add landing effect
-            token.style.animation = 'tokenLand 0.4s ease-out';
-            setTimeout(() => token.style.animation = '', 400);
+            // Add landing effect without resetting position
+            const posFinal = spaceCenters[to];
+            token.animate([
+                { transform: `translate(${posFinal.x}px, ${posFinal.y}px) translate(-50%, -50%) scale(1.2)` },
+                { transform: `translate(${posFinal.x}px, ${posFinal.y}px) translate(-50%, -50%) scale(0.9)` },
+                { transform: `translate(${posFinal.x}px, ${posFinal.y}px) translate(-50%, -50%) scale(1)` }
+            ], { duration: 400, easing: 'ease-out' });
             // Play move sound when token lands
             soundSystem.playMove();
         }
