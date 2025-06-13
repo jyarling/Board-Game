@@ -705,17 +705,6 @@ body {
     }
 }
 
-@keyframes tokenLand {
-    0% {
-        transform: translate(-50%, -50%) scale(1.2);
-    }
-    50% {
-        transform: translate(-50%, -50%) scale(0.9);
-    }
-    100% {
-        transform: translate(-50%, -50%) scale(1);
-    }
-}
 
 /* 3D Dice Styles */
 #diceContainer {
